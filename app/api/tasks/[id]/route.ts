@@ -70,7 +70,12 @@ export async function PUT(
     
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        updateData[field] = body[field];
+        // progress 范围校验：0-100
+        if (field === 'progress' && typeof body[field] === 'number') {
+          updateData[field] = Math.min(100, Math.max(0, body[field]));
+        } else {
+          updateData[field] = body[field];
+        }
       }
     }
 

@@ -147,7 +147,7 @@ export type OutputConfig = {
 // 渲染模板槽位定义
 export type SlotDef = {
   label: string;
-  type: 'text' | 'richtext' | 'image' | 'data';
+  type: 'content' | 'image' | 'data' | 'text' | 'richtext';
   description?: string;
   placeholder?: string;
 };
@@ -218,12 +218,13 @@ export const taskLogs = sqliteTable('task_logs', {
 });
 
 // 评论表
-export const comments = sqliteTable('comments', {
+export const comments = sqliteTable('task_comments', {
   id: text('id').primaryKey(),
   taskId: text('task_id').notNull().references(() => tasks.id),
-  authorId: text('author_id').notNull(),
+  memberId: text('member_id').notNull(),
   content: text('content').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
 
 // 文档表

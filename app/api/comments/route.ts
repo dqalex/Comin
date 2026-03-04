@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { taskId, authorId, content } = body;
+    const { taskId, memberId, content } = body;
 
     if (!taskId || !content) {
       return NextResponse.json({ error: 'taskId 和 content 为必填' }, { status: 400 });
@@ -40,12 +40,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '关联任务不存在' }, { status: 404 });
     }
 
+    const now = new Date();
     const newComment = {
       id: generateCommentId(),
       taskId,
-      authorId: authorId || 'system',
+      memberId: memberId || 'system',
       content,
-      createdAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     await db.insert(comments).values(newComment);

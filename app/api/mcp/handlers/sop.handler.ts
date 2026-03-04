@@ -10,6 +10,7 @@ import { eq } from 'drizzle-orm';
 import { generateId } from '@/lib/id';
 import { eventBus } from '@/lib/event-bus';
 import { parseKnowHow, extractLayers, appendToL4 } from '@/lib/knowhow-parser';
+import { renderTemplateWithContext } from '@/lib/template-engine';
 import type { SOPStage, StageRecord, SOPCategory, StageOutputType, KnowledgeConfig } from '@/db/schema';
 
 type HandlerResult = { success: boolean; data?: unknown; error?: string };
@@ -155,6 +156,30 @@ export async function handleAdvanceSopStage(params: Record<string, unknown>): Pr
 
   eventBus.emit({ type: 'task_update', resourceId: task_id });
 
+  // 渲染阶段完成通知（使用 sop-stage-result 模板）
+  let stageResultNotification: string | null = null;
+  try {
+    const completedStage = stages[currentIndex];
+    const nextStage = !isCompleted && nextStageId ? stages[nextIndex] : null;
+    stageResultNotification = await renderTemplateWithContext('sop-stage-result', {
+      timestamp: new Date().toLocaleString('zh-CN'),
+      task_id,
+      task_title: task.title,
+      sop_name: template.name,
+      completed_stage_label: completedStage.label,
+      completed_stage_index: currentIndex + 1,
+      total_stages: stages.length,
+      stage_output: stage_output || '',
+      is_sop_completed: isCompleted,
+      has_next_stage: !isCompleted && !!nextStage,
+      next_stage_label: nextStage?.label || '',
+      next_stage_type: nextStage?.type || '',
+      progress: Math.round(((currentIndex + 1) / stages.length) * 100),
+    });
+  } catch {
+    // 模板渲染失败不影响核心流程
+  }
+
   return {
     success: true,
     data: {
@@ -164,6 +189,7 @@ export async function handleAdvanceSopStage(params: Record<string, unknown>): Pr
       is_sop_completed: isCompleted,
       progress: Math.round(((currentIndex + 1) / stages.length) * 100),
       render_document_id: nextRenderDocId,
+      stage_result_notification: stageResultNotification,
     },
   };
 }
@@ -220,8 +246,39 @@ export async function handleRequestSopConfirm(params: Record<string, unknown>): 
     .where(eq(tasks.id, task_id));
 
   eventBus.emit({ type: 'task_update', resourceId: task_id });
-  // 可以额外发送确认请求通知
-  eventBus.emit({ type: 'sop_confirm_request', resourceId: task_id, data: { message: confirm_message } });
+
+  // 渲染确认请求通知（使用 sop-confirm-request 模板）
+  let confirmNotification: string | null = null;
+  try {
+    // 获取 SOP 模板信息用于渲染
+    const sopTemplate = task.sopTemplateId
+      ? await db.query.sopTemplates.findFirst({ where: eq(sopTemplates.id, task.sopTemplateId) })
+      : null;
+    const sopStages = (sopTemplate?.stages || []) as SOPStage[];
+    const stageIndex = sopStages.findIndex(s => s.id === task.currentStageId);
+    const currentSopStage = stageIndex >= 0 ? sopStages[stageIndex] : null;
+
+    confirmNotification = await renderTemplateWithContext('sop-confirm-request', {
+      timestamp: new Date().toLocaleString('zh-CN'),
+      task_id,
+      task_title: task.title,
+      sop_name: sopTemplate?.name || '',
+      stage_label: currentSopStage?.label || '',
+      stage_index: stageIndex + 1,
+      total_stages: sopStages.length,
+      confirm_message,
+      stage_output,
+    });
+  } catch {
+    // 模板渲染失败不影响核心流程
+  }
+
+  // 发送确认请求事件（携带渲染后的通知内容）
+  eventBus.emit({
+    type: 'sop_confirm_request',
+    resourceId: task_id,
+    data: { message: confirm_message, notification: confirmNotification },
+  });
 
   return {
     success: true,
@@ -230,6 +287,7 @@ export async function handleRequestSopConfirm(params: Record<string, unknown>): 
       stage_id: task.currentStageId,
       confirm_message,
       awaiting_confirmation: true,
+      confirm_notification: confirmNotification,
     },
   };
 }

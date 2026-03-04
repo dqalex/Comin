@@ -11,28 +11,24 @@ import { useDocumentStore, useProjectStore, useMemberStore, useTaskStore, useDel
 import { useRenderTemplateStore } from '@/store/render-template.store';
 import AppShell from '@/components/AppShell';
 import Header from '@/components/Header';
-import { Button, Input, Select, Badge } from '@/components/ui';
+import { Button, Input, Select } from '@/components/ui';
 import DeliveryStatusCard from '@/components/wiki/DeliveryStatusCard';
 import AnnotationPanel from '@/components/wiki/AnnotationPanel';
 import type { TextSelection } from '@/components/wiki/AnnotationPanel';
-import type { EditorTextSelection } from '@/components/MarkdownEditor';
 import type { Document } from '@/db/schema';
-import type { ElementSelection } from '@/components/studio/HtmlPreview';
 import dynamic from 'next/dynamic';
 import {
   FileText, Plus, Search, Trash2, ExternalLink, Globe, File,
   FolderOpen, Tag, X, ChevronDown, ChevronRight, ClipboardList,
   BookOpen, FileQuestion, Calendar, CheckSquare, Users, Link2, Briefcase,
   Share2, Copy, Check, Edit2, Save, XCircle, MessageSquare, Send,
-  Download, Eye, Columns,
+  Download, Eye, LayoutTemplate,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { DOC_TEMPLATES } from '@/lib/doc-templates';
-import { useSlotSync } from '@/hooks/useSlotSync';
+import { syncMdToHtml as directSyncMdToHtml } from '@/lib/slot-sync';
 
-// Content Studio 组件（动态加载）
-const HtmlPreview = dynamic(() => import('@/components/studio/HtmlPreview'), { ssr: false });
-const PropertyPanel = dynamic(() => import('@/components/studio/PropertyPanel'), { ssr: false });
+// 导出对话框（保留导出能力，在「模板可视化」全屏模式下可用）
 const ExportModal = dynamic(() => import('@/components/studio/ExportModal'), { ssr: false });
 
 const MarkdownEditor = dynamic(() => import('@/components/MarkdownEditor'), { 
@@ -110,17 +106,14 @@ export default function WikiPage() {
   // 预览区文本选中状态（用于批注定位）
   const [textSelection, setTextSelection] = useState<TextSelection | null>(null);
 
-  // === Content Studio 状态 ===
+  // === 渲染模板相关状态 ===
   const { templates: renderTemplates } = useRenderTemplateStore();
-  const [studioEditMode, setStudioEditMode] = useState(false);
-  const [selectedElement, setSelectedElement] = useState<ElementSelection | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [studioHtmlContent, setStudioHtmlContent] = useState('');
   const [newDocRenderTemplateId, setNewDocRenderTemplateId] = useState('');
+  const [templatePreviewMode, setTemplatePreviewMode] = useState<'html' | 'md'>('html');
 
-  // 选中的文档 + visual 模式判断（Content Studio 依赖）
   const selectedDoc = documents.find(d => d.id === selectedDocId);
-  const isVisualMode = selectedDoc?.renderMode === 'visual';
 
   // 获取关联的渲染模板
   const currentRenderTemplate = useMemo(() => {
@@ -128,49 +121,46 @@ export default function WikiPage() {
     return renderTemplates.find(t => t.id === selectedDoc.renderTemplateId) || null;
   }, [selectedDoc?.renderTemplateId, renderTemplates]);
 
-  // 槽位同步 hook
-  const slotSync = useSlotSync(
-    currentRenderTemplate?.htmlTemplate || '',
-    (currentRenderTemplate?.slots || {}) as Record<string, import('@/lib/slot-sync').SlotDef>,
-    currentRenderTemplate?.cssTemplate || undefined,
-    {
-      debounceMs: 300,
-      onSlotChange: useCallback((slotName: string, value: string) => {
-        // 自动保存 slotData
-        if (selectedDocId) {
-          const currentSlotData = selectedDoc?.slotData || {};
-          updateDocumentAsync(selectedDocId, {
-            slotData: { ...currentSlotData, [slotName]: value },
-          });
-        }
-      }, [selectedDocId, selectedDoc?.slotData, updateDocumentAsync]),
-    }
-  );
-
-  // MD 变更时同步到 HTML（visual 模式）
+  // MD 变更时同步到 HTML（有渲染模板时持续同步）
   const syncDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
-    if (!isVisualMode || !currentRenderTemplate || !editContent) return;
+    if (!currentRenderTemplate || !editContent) return;
     if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
     syncDebounceRef.current = setTimeout(() => {
-      const html = slotSync.mdToHtml(editContent);
-      if (html) setStudioHtmlContent(html);
+      try {
+        const result = directSyncMdToHtml(
+          editContent,
+          currentRenderTemplate.htmlTemplate || '',
+          (currentRenderTemplate.slots || {}) as Record<string, import('@/lib/slot-sync').SlotDef>,
+          currentRenderTemplate.cssTemplate || undefined,
+        );
+        if (result.html) setStudioHtmlContent(result.html);
+      } catch (err) {
+        console.error('[wiki] MD→HTML 同步失败:', err);
+      }
     }, 300);
     return () => { if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current); };
-  }, [editContent, isVisualMode, currentRenderTemplate, slotSync]);
+  }, [editContent, currentRenderTemplate]);
 
-  // 切换文档时，初始化 HTML 内容
+  // 切换文档时，初始化 HTML 内容（直接调用 syncMdToHtml，不走互斥锁）
   useEffect(() => {
-    if (isVisualMode && selectedDoc?.htmlContent) {
+    if (selectedDoc?.htmlContent && currentRenderTemplate) {
       setStudioHtmlContent(selectedDoc.htmlContent);
-    } else if (isVisualMode && currentRenderTemplate && editContent) {
-      const html = slotSync.mdToHtml(editContent);
-      if (html) setStudioHtmlContent(html);
+    } else if (currentRenderTemplate && editContent) {
+      try {
+        const result = directSyncMdToHtml(
+          editContent,
+          currentRenderTemplate.htmlTemplate || '',
+          (currentRenderTemplate.slots || {}) as Record<string, import('@/lib/slot-sync').SlotDef>,
+          currentRenderTemplate.cssTemplate || undefined,
+        );
+        if (result.html) setStudioHtmlContent(result.html);
+      } catch (err) {
+        console.error('[wiki] 初始化 HTML 失败:', err);
+      }
     } else {
       setStudioHtmlContent('');
     }
-    setSelectedElement(null);
-    setStudioEditMode(false);
   }, [selectedDocId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 内容变更（防抖保存）— 移至此处供 Content Studio 回调引用
@@ -182,54 +172,11 @@ export default function WikiPage() {
     }, 500);
   }, [selectedDocId, updateDocumentAsync]);
 
-  // iframe 内容变更回调（HTML → MD 反向同步）
-  const handleStudioContentChanged = useCallback((slotValues: Record<string, string>) => {
-    if (!slotSync.isInternalChange.current) return;
-    // 由 iframe 编辑触发的变更，反向同步到 MD
-    // 使用 slot 值直接更新 MD（不走完整的 HTML→MD 解析）
-    let newContent = editContent;
-    for (const [slotName, value] of Object.entries(slotValues)) {
-      const pattern = new RegExp(
-        `(<!-- @slot:${slotName} -->)[\\s\\S]*?(<!-- @\\/slot -->)`,
-        'g'
-      );
-      newContent = newContent.replace(pattern, `$1\n${value}\n$2`);
-    }
-    if (newContent !== editContent) {
-      handleContentChange(newContent);
-    }
-  }, [editContent, handleContentChange, slotSync.isInternalChange]);
-
-  // PropertyPanel 样式变更 → 发送到 iframe
-  const handleStudioStyleChange = useCallback((slotName: string, styles: Record<string, string>) => {
-    // 通过 postMessage 发送到 iframe（HtmlPreview 组件内部处理）
-    const iframe = document.querySelector('iframe[title="Content Studio Preview"]') as HTMLIFrameElement;
-    iframe?.contentWindow?.postMessage({ type: 'setStyle', slotName, styles }, '*');
-  }, []);
-
-  // PropertyPanel 图片替换
-  const handleStudioImageReplace = useCallback((slotName: string, imageUrl: string) => {
-    const iframe = document.querySelector('iframe[title="Content Studio Preview"]') as HTMLIFrameElement;
-    iframe?.contentWindow?.postMessage({ type: 'replaceImage', slotName, value: imageUrl }, '*');
-  }, []);
-
-  // 切换 renderMode
-  const handleToggleRenderMode = useCallback(async () => {
-    if (!selectedDoc) return;
-    const newMode = selectedDoc.renderMode === 'visual' ? 'markdown' : 'visual';
-    if (newMode === 'visual' && !selectedDoc.renderTemplateId) {
-      // 需要先选择渲染模板
-      return;
-    }
-    await updateDocumentAsync(selectedDoc.id, { renderMode: newMode });
-  }, [selectedDoc, updateDocumentAsync]);
-
-  // 保存 HTML 内容（visual 模式下定期保存 + 导出前保存）
+  // 保存 HTML 内容（有渲染模板时可用）
   const handleSaveStudioHtml = useCallback(async () => {
-    if (!selectedDocId || !isVisualMode || !studioHtmlContent) return;
-    const cleanHtml = slotSync.cleanForExport(studioHtmlContent);
-    await updateDocumentAsync(selectedDocId, { htmlContent: cleanHtml });
-  }, [selectedDocId, isVisualMode, studioHtmlContent, updateDocumentAsync, slotSync]);
+    if (!selectedDocId || !studioHtmlContent) return;
+    await updateDocumentAsync(selectedDocId, { htmlContent: studioHtmlContent });
+  }, [selectedDocId, studioHtmlContent, updateDocumentAsync]);
 
   const currentProject = projects.find(p => p.id === currentProjectId);
 
@@ -358,7 +305,12 @@ export default function WikiPage() {
 
   const handleCreateDoc = useCallback(async () => {
     if (!newDocTitle.trim()) return;
-    const template = DOC_TEMPLATES[newDocType] || '';
+    // 如果选择了渲染模板，用模板的 mdTemplate 作为初始内容（含示例数据）
+    let template = DOC_TEMPLATES[newDocType] || '';
+    if (newDocRenderTemplateId) {
+      const rt = renderTemplates.find(t => t.id === newDocRenderTemplateId);
+      if (rt?.mdTemplate) template = rt.mdTemplate;
+    }
     const doc = await createDocument({
       title: newDocTitle.trim(),
       content: template,
@@ -366,7 +318,6 @@ export default function WikiPage() {
       type: newDocType as any,
       projectId: currentProjectId || undefined,
       projectTags: newDocProjectTags,
-      renderMode: newDocRenderTemplateId ? 'visual' : 'markdown',
       renderTemplateId: newDocRenderTemplateId || undefined,
     });
     if (doc) {
@@ -377,7 +328,7 @@ export default function WikiPage() {
     setNewDocType('note');
     setNewDocProjectTags([]);
     setShowNewDocDialog(false);
-  }, [newDocTitle, newDocType, newDocSource, newDocProjectTags, currentProjectId, createDocument]);
+  }, [newDocTitle, newDocType, newDocSource, newDocProjectTags, newDocRenderTemplateId, currentProjectId, createDocument, renderTemplates]);
 
   const handleDelete = useCallback(async () => {
     if (selectedDocId) {
@@ -489,6 +440,19 @@ export default function WikiPage() {
   const handleTypeChange = async (newType: string) => {
     if (!selectedDoc || selectedDoc.type === newType) return;
     await updateDocumentAsync(selectedDoc.id, { type: newType as any });
+  };
+
+  // 更换渲染模板
+  const handleRenderTemplateChange = async (templateId: string) => {
+    if (!selectedDoc) return;
+    const newTemplateId = templateId || null;
+    const updates: Record<string, unknown> = { renderTemplateId: newTemplateId };
+    // 移除模板时清空关联数据
+    if (!newTemplateId) {
+      updates.htmlContent = null;
+      updates.slotData = null;
+    }
+    await updateDocumentAsync(selectedDoc.id, updates as any);
   };
 
   // 提交文档交付
@@ -676,34 +640,8 @@ export default function WikiPage() {
                       <ExternalLink className="w-3.5 h-3.5" /> {t('wiki.openExternal')}
                     </a>
                   )}
-                  {/* Content Studio 模式切换 */}
-                  {selectedDoc.renderTemplateId && (
-                    <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] rounded-md p-0.5">
-                      <button
-                        onClick={() => { if (isVisualMode) handleToggleRenderMode(); }}
-                        className={clsx(
-                          'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-                          !isVisualMode
-                            ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
-                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                        )}
-                      >
-                        <Edit2 size={12} /> MD
-                      </button>
-                      <button
-                        onClick={() => { if (!isVisualMode) handleToggleRenderMode(); }}
-                        className={clsx(
-                          'flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors',
-                          isVisualMode
-                            ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
-                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                        )}
-                      >
-                        <Columns size={12} /> {t('studio.visualMode')}
-                      </button>
-                    </div>
-                  )}
-                  {isVisualMode && (
+                  {/* 有渲染模板时显示保存和导出 */}
+                  {selectedDoc.renderTemplateId && studioHtmlContent && (
                     <>
                       <Button size="sm" variant="ghost" className="text-xs" onClick={handleSaveStudioHtml}>
                         <Save className="w-3.5 h-3.5" /> {t('common.save')}
@@ -753,6 +691,24 @@ export default function WikiPage() {
                   <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{t('wiki.type')}</span>
                   <Select value={selectedDoc.type} onChange={e => handleTypeChange(e.target.value)} className="text-xs bg-transparent">
                     {typeOrder.map(tp => <option key={tp} value={tp}>{typeLabels[tp]}</option>)}
+                  </Select>
+                </div>
+
+                {/* 渲染模板选择（已绑定模板的文档锁死不可切换，因为不同模板 slot 定义不通用） */}
+                <div className="w-px h-4" style={{ background: 'var(--border)' }} />
+                <div className="flex items-center gap-1.5">
+                  <LayoutTemplate className="w-3 h-3" style={{ color: 'var(--text-tertiary)' }} />
+                  <Select
+                    value={selectedDoc.renderTemplateId || ''}
+                    onChange={e => handleRenderTemplateChange(e.target.value)}
+                    disabled={!!selectedDoc.renderTemplateId}
+                    className="text-xs bg-transparent"
+                    title={selectedDoc.renderTemplateId ? t('wiki.templateLocked') : ''}
+                  >
+                    <option value="">{t('wiki.noTemplate')}</option>
+                    {renderTemplates.map(rt => (
+                      <option key={rt.id} value={rt.id}>{rt.name}</option>
+                    ))}
                   </Select>
                 </div>
 
@@ -929,58 +885,16 @@ export default function WikiPage() {
               )}
 
               <div className="flex-1 overflow-hidden">
-                {isVisualMode ? (
-                  // Content Studio 三栏布局
-                  <div className="flex h-full">
-                    {/* 左栏：MD 编辑 */}
-                    <div className="w-[35%] min-w-[280px] border-r flex flex-col" style={{ borderColor: 'var(--border)' }}>
-                      <div className="px-3 py-1.5 border-b text-[10px] font-medium text-[var(--text-secondary)]" style={{ borderColor: 'var(--border)', background: 'var(--surface-hover)' }}>
-                        Markdown
-                      </div>
-                      <div className="flex-1 overflow-hidden">
-                        <MarkdownEditor
-                          key={`${selectedDocId}-studio`}
-                          value={editContent}
-                          onChange={handleContentChange}
-                          placeholder={t('wiki.startWriting')}
-                          onSelectionChange={(sel) => setTextSelection(sel ? { text: sel.text, lineIndex: sel.lineIndex } : null)}
-                        />
-                      </div>
-                    </div>
-                    {/* 中栏：HTML 预览 */}
-                    <div className="flex-1 min-w-[400px]">
-                      <HtmlPreview
-                        htmlContent={studioHtmlContent}
-                        editMode={studioEditMode}
-                        onEditModeChange={setStudioEditMode}
-                        onElementSelected={setSelectedElement}
-                        onContentChanged={handleStudioContentChanged}
-                      />
-                    </div>
-                    {/* 右栏：属性面板 */}
-                    <div className="w-[220px] border-l flex flex-col" style={{ borderColor: 'var(--border)' }}>
-                      <div className="px-3 py-1.5 border-b text-[10px] font-medium text-[var(--text-secondary)]" style={{ borderColor: 'var(--border)', background: 'var(--surface-hover)' }}>
-                        {t('studio.properties')}
-                      </div>
-                      <PropertyPanel
-                        selection={selectedElement}
-                        onStyleChange={handleStudioStyleChange}
-                        onImageReplace={handleStudioImageReplace}
-                        className="flex-1"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  // 普通 Markdown 模式
-                  <MarkdownEditor
-                    key={selectedDocId}
-                    value={selectedDoc.source === 'openclaw' && isEditingOpenclaw ? openclawEditContent : editContent}
-                    onChange={selectedDoc.source === 'openclaw' && isEditingOpenclaw ? setOpenclawEditContent : handleContentChange}
-                    placeholder={t('wiki.startWriting')}
-                    readOnly={selectedDoc.source === 'openclaw' && !isEditingOpenclaw}
-                    onSelectionChange={(sel) => setTextSelection(sel ? { text: sel.text, lineIndex: sel.lineIndex } : null)}
-                  />
-                )}
+                <MarkdownEditor
+                  key={selectedDocId}
+                  value={selectedDoc.source === 'openclaw' && isEditingOpenclaw ? openclawEditContent : editContent}
+                  onChange={selectedDoc.source === 'openclaw' && isEditingOpenclaw ? setOpenclawEditContent : handleContentChange}
+                  placeholder={t('wiki.startWriting')}
+                  readOnly={selectedDoc.source === 'openclaw' && !isEditingOpenclaw}
+                  onSelectionChange={(sel) => setTextSelection(sel ? { text: sel.text, lineIndex: sel.lineIndex } : null)}
+                  renderHtml={currentRenderTemplate ? (studioHtmlContent || currentRenderTemplate.htmlTemplate || undefined) : undefined}
+                  renderCss={currentRenderTemplate?.cssTemplate || undefined}
+                />
               </div>
 
               {/* 批注面板 - 始终可添加批注（不受编辑模式限制） */}
@@ -1006,11 +920,29 @@ export default function WikiPage() {
       </div>
 
       {/* 新建文档对话框 */}
-      {showNewDocDialog && (
+      {showNewDocDialog && (() => {
+        const selectedRt = newDocRenderTemplateId ? renderTemplates.find(t => t.id === newDocRenderTemplateId) : null;
+        const hasTemplate = !!selectedRt?.htmlTemplate;
+        // 将 mdTemplate 示例内容注入到 HTML 骨架中，用于预览
+        let previewHtml = selectedRt?.htmlTemplate || '';
+        if (hasTemplate && selectedRt?.mdTemplate) {
+          try {
+            const result = directSyncMdToHtml(
+              selectedRt.mdTemplate,
+              selectedRt.htmlTemplate!,
+              (selectedRt.slots || {}) as Record<string, import('@/db/schema').SlotDef>,
+              selectedRt.cssTemplate || undefined,
+            );
+            previewHtml = result.html;
+          } catch { /* 降级到原始 htmlTemplate */ }
+        }
+        return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="create-doc-title">
-          <div className="rounded-2xl p-6 w-96 shadow-float" style={{ background: 'var(--surface)' }}>
+          <div className={clsx('rounded-2xl shadow-float flex', hasTemplate ? 'w-[840px] max-h-[85vh]' : 'w-96')} style={{ background: 'var(--surface)' }}>
+            {/* 左侧：表单 */}
+            <div className={clsx('p-6 flex flex-col', hasTemplate ? 'w-[380px] flex-shrink-0 border-r overflow-y-auto' : 'w-full')} style={hasTemplate ? { borderColor: 'var(--border)' } : undefined}>
             <h3 id="create-doc-title" className="font-display font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>{t('wiki.createDocTitle')}</h3>
-            <div className="space-y-3">
+            <div className="space-y-3 flex-1">
               <div>
                 <label className="text-xs mb-1 block" style={{ color: 'var(--text-tertiary)' }}>{t('wiki.docTitle')}</label>
                 <Input value={newDocTitle} onChange={e => setNewDocTitle(e.target.value)}
@@ -1045,7 +977,7 @@ export default function WikiPage() {
                   })}
                 </div>
                 {DOC_TEMPLATES[newDocType] && (
-                  <div className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--surface-hover)', color: 'var(--text-tertiary)' }}>
+                  <div className="text-[10px] px-2 py-1 rounded mt-1" style={{ background: 'var(--surface-hover)', color: 'var(--text-tertiary)' }}>
                     {t('wiki.willAutoFill', { type: typeLabels[newDocType] })}
                   </div>
                 )}
@@ -1070,13 +1002,13 @@ export default function WikiPage() {
                   {projects.length === 0 && <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('wiki.noProjects')}</span>}
                 </div>
               </div>
-              {/* 渲染模板选择（Content Studio） */}
+              {/* 渲染模板选择 */}
               {renderTemplates.filter(t => t.status === 'active').length > 0 && (
                 <div>
                   <label className="text-xs mb-1 block" style={{ color: 'var(--text-tertiary)' }}>{t('studio.renderTemplate')}</label>
                   <Select
                     value={newDocRenderTemplateId}
-                    onChange={(e) => setNewDocRenderTemplateId(e.target.value)}
+                    onChange={(e) => { setNewDocRenderTemplateId(e.target.value); setTemplatePreviewMode('html'); }}
                     className="text-xs"
                   >
                     <option value="">{t('studio.noTemplate')}</option>
@@ -1085,7 +1017,7 @@ export default function WikiPage() {
                     ))}
                   </Select>
                   <p className="text-[10px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {t('studio.templateHint')}
+                    {newDocRenderTemplateId ? t('studio.templateWithExample') : t('studio.templateHint')}
                   </p>
                 </div>
               )}
@@ -1094,9 +1026,66 @@ export default function WikiPage() {
               <Button size="sm" variant="secondary" onClick={() => { setShowNewDocDialog(false); setNewDocProjectTags([]); setNewDocType('note'); setNewDocRenderTemplateId(''); }}>{t('common.cancel')}</Button>
               <Button size="sm" onClick={handleCreateDoc}>{t('common.create')}</Button>
             </div>
+            </div>
+            {/* 右侧：模板预览（选中渲染模板时显示） */}
+            {hasTemplate && selectedRt && (
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                {/* 预览 tab 栏 */}
+                <div className="flex items-center gap-1 px-3 py-2 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface-hover)' }}>
+                  <Eye className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
+                  <span className="text-xs font-medium mr-2" style={{ color: 'var(--text-secondary)' }}>{t('studio.templatePreview')}</span>
+                  <div className="flex items-center gap-0.5 bg-[var(--bg-tertiary)] rounded-md p-0.5">
+                    <button
+                      onClick={() => setTemplatePreviewMode('html')}
+                      className={clsx(
+                        'px-2 py-0.5 rounded text-[11px] transition-colors',
+                        templatePreviewMode === 'html'
+                          ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm font-medium'
+                          : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                      )}
+                    >
+                      {t('studio.htmlView')}
+                    </button>
+                    <button
+                      onClick={() => setTemplatePreviewMode('md')}
+                      className={clsx(
+                        'px-2 py-0.5 rounded text-[11px] transition-colors',
+                        templatePreviewMode === 'md'
+                          ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm font-medium'
+                          : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                      )}
+                    >
+                      {t('studio.mdView')}
+                    </button>
+                  </div>
+                  <span className="text-[10px] ml-auto" style={{ color: 'var(--text-tertiary)' }}>
+                    {selectedRt.slots ? `${Object.keys(selectedRt.slots).length} ${t('renderTemplate.slots')}` : ''}
+                  </span>
+                </div>
+                {/* 预览内容 */}
+                <div className="flex-1 overflow-auto" style={{ background: templatePreviewMode === 'html' ? '#f8fafc' : 'var(--surface)' }}>
+                  {templatePreviewMode === 'html' ? (
+                    <iframe
+                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;background:#f8fafc;overflow:auto;}${selectedRt.cssTemplate || ''}</style></head><body>${previewHtml}</body></html>`}
+                      className="w-full h-full"
+                      style={{ border: 'none', minHeight: '400px' }}
+                      sandbox="allow-same-origin"
+                      title="template-preview"
+                    />
+                  ) : (
+                    <div className="p-4">
+                      <pre className="text-xs leading-relaxed whitespace-pre-wrap break-words font-mono" style={{ color: 'var(--text-secondary)' }}>
+                        {selectedRt.mdTemplate || '(无 MD 模板)'}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 删除确认 */}
       <ConfirmDialog

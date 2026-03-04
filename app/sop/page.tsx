@@ -8,17 +8,19 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import AppShell from '@/components/AppShell';
 import Header from '@/components/Header';
 import { Button, Input, Badge } from '@/components/ui';
-import { useSOPTemplateStore, useProjectStore } from '@/store';
+import { useSOPTemplateStore, useProjectStore, useChatStore } from '@/store';
 import { useRenderTemplateStore } from '@/store/render-template.store';
-import type { SOPTemplate, SOPCategory, SOPStage, RenderTemplate } from '@/db/schema';
+import type { SOPTemplate, SOPCategory, SOPStage, RenderTemplate, NewRenderTemplate } from '@/db/schema';
 import clsx from 'clsx';
 import {
   ClipboardList, Search, Plus, ChevronRight, Trash2, Edit2,
   FileText, BarChart2, Search as SearchIcon, Code, Calendar,
   Layers, AlertTriangle, CheckCircle2,
-  Download, Upload, Palette, Eye,
+  Download, Upload, Palette, Eye, MessageSquare, Sparkles, Code2, SlidersHorizontal,
 } from 'lucide-react';
 import SOPTemplateEditor from '@/components/sop/SOPTemplateEditor';
+import { syncMdToHtml as directSyncMdToHtml } from '@/lib/slot-sync';
+import type { SlotDef } from '@/db/schema';
 
 type PageTab = 'sop' | 'render';
 
@@ -198,6 +200,13 @@ export default function SOPPage() {
   // === 渲染模板 ===
   const [selectedRtId, setSelectedRtId] = useState<string | null>(null);
   const rtDeleteConfirm = useConfirmAction<string>();
+  type RtDetailTab = 'preview' | 'code' | 'slots';
+  const [rtDetailTab, setRtDetailTab] = useState<RtDetailTab>('preview');
+  // AI 创建渲染模板
+  const [showAiCreateRt, setShowAiCreateRt] = useState(false);
+  const [aiCreateRtPrompt, setAiCreateRtPrompt] = useState('');
+  const [aiCreateRtSending, setAiCreateRtSending] = useState(false);
+  const { openChatWithMessage } = useChatStore();
   
   const selectedRt = useMemo(() => 
     renderTemplates.find(t => t.id === selectedRtId) || null,
@@ -215,6 +224,65 @@ export default function SOPPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageTab]);
   
+  // 新建渲染模板
+  const handleCreateRenderTemplate = useCallback(() => {
+    const name = prompt(t('sop.templateName'));
+    if (!name) return;
+    const defaultHtml = [
+      '<div style="max-width:800px;margin:0 auto;padding:48px;font-family:sans-serif;color:#1a1a2e;background:#fff;">',
+      '  <h1 data-slot="title">标题</h1>',
+      '  <div data-slot="body">正文内容</div>',
+      '</div>',
+    ].join('\n');
+    const defaultMd = '<!-- @slot:title -->\n# 标题\n\n<!-- @slot:body -->\n正文内容';
+    useRenderTemplateStore.getState().createTemplate({
+      name,
+      description: '',
+      category: 'custom',
+      status: 'active',
+      htmlTemplate: defaultHtml,
+      mdTemplate: defaultMd,
+      cssTemplate: '',
+      slots: { title: { label: '标题', type: 'text', placeholder: '输入标题' }, body: { label: '正文', type: 'richtext', placeholder: '输入正文' } } as Record<string, unknown>,
+      sections: [{ id: 'main', label: '主体', slots: ['title', 'body'] }],
+      exportConfig: { formats: ['jpg', 'html'] },
+      thumbnail: null,
+      isBuiltin: false,
+      createdBy: 'user',
+    } as Omit<NewRenderTemplate, 'id' | 'createdAt' | 'updatedAt'>);
+  }, [t]);
+
+  // AI 创建渲染模板：通过聊天信道发送需求给 Agent
+  const handleAiCreateRt = useCallback(() => {
+    if (!aiCreateRtPrompt.trim() || aiCreateRtSending) return;
+    setAiCreateRtSending(true);
+    const message = `请为 CoMind 创建一个 HTML 渲染模板，需求如下：
+
+${aiCreateRtPrompt.trim()}
+
+## 模板规范
+
+渲染模板由以下部分组成：
+1. **htmlTemplate** — HTML 结构，动态数据位置用 \`data-slot="slotName"\` 属性标记
+2. **mdTemplate** — 对应的 Markdown 模板，用 \`<!-- @slot:slotName -->\` 标记每个槽位
+3. **cssTemplate** — 可选的自定义 CSS
+4. **slots** — 每个 data-slot 的定义：\`{ label, type: 'text'|'richtext'|'image'|'data', placeholder }\`
+5. **sections** — 区块分组定义：\`{ id, label, slots: string[] }\`
+
+## 安全约束
+- 禁止 <script>、on* 事件属性、javascript: 协议、<iframe>
+- 所有样式用 inline style 或 cssTemplate
+
+请使用 MCP 工具 \`create_render_template\` 创建模板。创建后模板为 draft 状态。`;
+
+    openChatWithMessage(message);
+    setTimeout(() => {
+      setAiCreateRtSending(false);
+      setAiCreateRtPrompt('');
+      setShowAiCreateRt(false);
+    }, 500);
+  }, [aiCreateRtPrompt, aiCreateRtSending, openChatWithMessage]);
+
   // 渲染模板分类颜色
   const rtCategoryColors: Record<string, string> = useMemo(() => ({
     report: 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400',
@@ -603,6 +671,49 @@ export default function SOPPage() {
         ) : (
           <>
             {/* 渲染模板标签页 */}
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                {t('renderTemplate.subtitle')}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={() => setShowAiCreateRt(!showAiCreateRt)}>
+                  <Sparkles className="w-4 h-4 mr-1.5" />
+                  {t('renderTemplate.aiCreate')}
+                </Button>
+                <Button onClick={handleCreateRenderTemplate}>
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  {t('sop.newTemplate')}
+                </Button>
+              </div>
+            </div>
+            
+            {/* AI 创建渲染模板弹出面板 */}
+            {showAiCreateRt && (
+              <div className="mb-6 card p-4" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('renderTemplate.aiCreate')}</span>
+                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('renderTemplate.aiCreateHint')}</span>
+                </div>
+                <textarea
+                  value={aiCreateRtPrompt}
+                  onChange={(e) => setAiCreateRtPrompt(e.target.value)}
+                  placeholder={t('renderTemplate.aiCreatePlaceholder')}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg border text-sm resize-none mb-3"
+                  style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => setShowAiCreateRt(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                  <Button size="sm" onClick={handleAiCreateRt} disabled={!aiCreateRtPrompt.trim() || aiCreateRtSending}>
+                    <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                    {aiCreateRtSending ? t('renderTemplate.aiCreateSending') : t('renderTemplate.aiCreate')}
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-12 gap-6">
               {/* 渲染模板列表 */}
               <div className="col-span-5">
@@ -691,7 +802,7 @@ export default function SOPPage() {
                 {selectedRt ? (
                   <div className="card p-6">
                     {/* 头部 */}
-                    <div className="flex items-start justify-between mb-6">
+                    <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-4">
                         <div className={clsx(
                           'w-14 h-14 rounded-xl flex items-center justify-center',
@@ -724,7 +835,7 @@ export default function SOPPage() {
                     </div>
                     
                     {/* 元信息 */}
-                    <div className="grid grid-cols-3 gap-4 mb-6 p-4 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                    <div className="grid grid-cols-3 gap-4 mb-4 p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
                       <div>
                         <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
                           {t('sop.category')}
@@ -751,86 +862,181 @@ export default function SOPPage() {
                       </div>
                     </div>
                     
-                    {/* 槽位定义 */}
-                    {selectedRt.slots && Object.keys(selectedRt.slots).length > 0 && (
-                      <div className="mb-6">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>
-                          Slots ({Object.keys(selectedRt.slots).length})
-                        </h3>
-                        <div className="space-y-2">
-                          {Object.entries(selectedRt.slots).map(([key, slot]) => (
-                            <div 
-                              key={key} 
-                              className="flex items-center gap-3 p-3 rounded-lg border"
-                              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-primary)' }}
-                            >
-                              <code className="text-xs font-mono px-2 py-0.5 rounded" 
-                                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--accent)' }}>
-                                {key}
-                              </code>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                                  {String((slot as Record<string, unknown>)?.label || key)}
-                                </span>
-                                {typeof (slot as Record<string, unknown>)?.type === 'string' && (
-                                  <Badge className="text-[9px] ml-2">
-                                    {String((slot as Record<string, unknown>).type)}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* 区块定义 */}
-                    {Array.isArray(selectedRt.sections) && selectedRt.sections.length > 0 && (
-                      <div className="mb-6">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>
-                          Sections ({selectedRt.sections.length})
-                        </h3>
-                        <div className="space-y-2">
-                          {selectedRt.sections.map((section, idx) => (
-                            <div 
-                              key={idx}
-                              className="flex items-center gap-3 p-3 rounded-lg border"
-                              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-primary)' }}
-                            >
-                              <div className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold"
-                                style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}
-                              >
-                                {idx + 1}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                                  {String((section as Record<string, unknown>)?.label || `Section ${idx + 1}`)}
-                                </span>
-                                {Boolean((section as Record<string, unknown>)?.repeatable) && (
-                                  <Badge className="text-[9px] ml-2 bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
-                                    repeatable
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* HTML 模板预览 */}
-                    {selectedRt.htmlTemplate && (
-                      <div>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>
-                          HTML Template
-                        </h3>
-                        <pre className="text-xs p-4 rounded-lg overflow-auto max-h-60 font-mono"
-                          style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                    {/* 详情 Tab 切换 */}
+                    <div className="flex gap-1 mb-4 p-1 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                      {([
+                        { key: 'preview' as RtDetailTab, icon: Eye, label: t('renderTemplate.previewTab') },
+                        { key: 'code' as RtDetailTab, icon: Code2, label: t('renderTemplate.codeTab') },
+                        { key: 'slots' as RtDetailTab, icon: SlidersHorizontal, label: t('renderTemplate.slotsTab') },
+                      ]).map(tab => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setRtDetailTab(tab.key)}
+                          className={clsx(
+                            'flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                            rtDetailTab === tab.key
+                              ? 'bg-white dark:bg-slate-700 shadow-sm'
+                              : 'hover:bg-white/50 dark:hover:bg-slate-700/50'
+                          )}
+                          style={{ color: rtDetailTab === tab.key ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
                         >
-                          {selectedRt.htmlTemplate.length > 2000 
-                            ? selectedRt.htmlTemplate.slice(0, 2000) + '\n...' 
-                            : selectedRt.htmlTemplate}
-                        </pre>
+                          <tab.icon className="w-3.5 h-3.5" />
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* 预览 Tab */}
+                    {rtDetailTab === 'preview' && (
+                      <div className="rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                        {selectedRt.htmlTemplate ? (() => {
+                          // 将 mdTemplate 示例内容注入到 HTML 骨架中，用于预览
+                          let injectedHtml = selectedRt.htmlTemplate;
+                          if (selectedRt.mdTemplate) {
+                            try {
+                              const result = directSyncMdToHtml(
+                                selectedRt.mdTemplate,
+                                selectedRt.htmlTemplate,
+                                (selectedRt.slots || {}) as Record<string, SlotDef>,
+                                selectedRt.cssTemplate || undefined,
+                              );
+                              injectedHtml = result.html;
+                            } catch { /* 降级到原始 htmlTemplate */ }
+                          }
+                          const previewHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:0;background:#f8fafc;}${selectedRt.cssTemplate || ''}</style></head><body>${injectedHtml}</body></html>`;
+                          return (
+                            <iframe
+                              srcDoc={previewHtml}
+                              className="w-full"
+                              style={{ height: '420px', border: 'none' }}
+                              sandbox="allow-same-origin"
+                              title="rt-preview"
+                            />
+                          );
+                        })() : (
+                          <div className="p-12 text-center" style={{ color: 'var(--text-tertiary)' }}>
+                            {t('studio.noContent')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* 代码 Tab */}
+                    {rtDetailTab === 'code' && (
+                      <div className="space-y-4">
+                        {selectedRt.htmlTemplate && (
+                          <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                              HTML Template
+                            </h3>
+                            <pre className="text-xs p-4 rounded-lg overflow-auto max-h-60 font-mono"
+                              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                            >
+                              {selectedRt.htmlTemplate}
+                            </pre>
+                          </div>
+                        )}
+                        {selectedRt.mdTemplate && (
+                          <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                              Markdown Template
+                            </h3>
+                            <pre className="text-xs p-4 rounded-lg overflow-auto max-h-40 font-mono"
+                              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                            >
+                              {selectedRt.mdTemplate}
+                            </pre>
+                          </div>
+                        )}
+                        {selectedRt.cssTemplate && (
+                          <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                              CSS
+                            </h3>
+                            <pre className="text-xs p-4 rounded-lg overflow-auto max-h-40 font-mono"
+                              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
+                            >
+                              {selectedRt.cssTemplate}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* 槽位 Tab */}
+                    {rtDetailTab === 'slots' && (
+                      <div className="space-y-4">
+                        {/* 槽位定义 */}
+                        {selectedRt.slots && Object.keys(selectedRt.slots).length > 0 && (
+                          <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>
+                              Slots ({Object.keys(selectedRt.slots).length})
+                            </h3>
+                            <div className="space-y-2">
+                              {Object.entries(selectedRt.slots).map(([key, slot]) => (
+                                <div 
+                                  key={key} 
+                                  className="flex items-center gap-3 p-3 rounded-lg border"
+                                  style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-primary)' }}
+                                >
+                                  <code className="text-xs font-mono px-2 py-0.5 rounded" 
+                                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--accent)' }}>
+                                    {key}
+                                  </code>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
+                                      {String((slot as Record<string, unknown>)?.label || key)}
+                                    </span>
+                                    {typeof (slot as Record<string, unknown>)?.type === 'string' && (
+                                      <Badge className="text-[9px] ml-2">
+                                        {String((slot as Record<string, unknown>).type)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {typeof (slot as Record<string, unknown>)?.placeholder === 'string' && (
+                                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                                      {String((slot as Record<string, unknown>).placeholder)}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* 区块定义 */}
+                        {Array.isArray(selectedRt.sections) && selectedRt.sections.length > 0 && (
+                          <div>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-tertiary)' }}>
+                              Sections ({selectedRt.sections.length})
+                            </h3>
+                            <div className="space-y-2">
+                              {selectedRt.sections.map((section, idx) => (
+                                <div 
+                                  key={idx}
+                                  className="flex items-center gap-3 p-3 rounded-lg border"
+                                  style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-primary)' }}
+                                >
+                                  <div className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold"
+                                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}
+                                  >
+                                    {idx + 1}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                                      {String((section as Record<string, unknown>)?.label || `Section ${idx + 1}`)}
+                                    </span>
+                                    {Boolean((section as Record<string, unknown>)?.repeatable) && (
+                                      <Badge className="text-[9px] ml-2 bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400">
+                                        repeatable
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

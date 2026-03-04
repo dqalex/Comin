@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/rate-limit';
 
 /**
  * 安全中间件
  * - 添加安全响应头（含 CSP）
  * - CSRF 保护（无 Origin/Referer 时拒绝变更请求）
  * - 请求体大小限制（Content-Length 缺失时也拦截）
+ * - 全局 API 限流（写操作）
  */
 
 // 允许的来源（开发环境允许所有，生产环境需要配置）
@@ -33,10 +35,13 @@ export function middleware(request: NextRequest) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  // CSP：限制资源来源，防止 XSS
+  // CSP：限制资源来源，防止 XSS（生产环境移除 unsafe-eval）
+  const scriptSrc = process.env.NODE_ENV === 'development' 
+    ? "'self' 'unsafe-inline' 'unsafe-eval'" 
+    : "'self' 'unsafe-inline'";
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self' data: https://fonts.gstatic.com;"
+    `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self' data: https://fonts.gstatic.com;`
   );
 
   if (isApiRoute) {
@@ -121,6 +126,36 @@ export function middleware(request: NextRequest) {
           );
         }
       }
+    }
+
+    // 5. 全局 API 限流（写操作统一限制，GET 不限制）
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+      const pathname = request.nextUrl.pathname;
+      const clientId = getClientIdentifier(request);
+      
+      // 敏感操作使用严格限制（debug 修复、MCP 外部调用）
+      const isStrict = pathname.startsWith('/api/debug') || pathname.startsWith('/api/mcp/external');
+      const config = isStrict ? RATE_LIMITS.STRICT : RATE_LIMITS.STANDARD;
+      const rateLimitKey = `${request.method}:${pathname}`;
+      
+      const result = checkRateLimit(`${clientId}:${rateLimitKey}`, config);
+      if (!result.allowed) {
+        return new NextResponse(
+          JSON.stringify({ error: '请求频率过高，请稍后重试', retryAfter: result.retryAfter }),
+          { 
+            status: 429, 
+            headers: { 
+              'Content-Type': 'application/json',
+              ...(result.retryAfter ? { 'Retry-After': String(result.retryAfter) } : {}),
+            } 
+          }
+        );
+      }
+      
+      // 添加限流头信息
+      response.headers.set('X-RateLimit-Limit', String(config.maxRequests));
+      response.headers.set('X-RateLimit-Remaining', String(result.remaining));
+      response.headers.set('X-RateLimit-Reset', String(result.resetTime));
     }
 
     // 添加请求 ID 用于追踪

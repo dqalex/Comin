@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { taskLogs } from '@/db/schema';
+import { taskLogs, tasks } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { generateLogId } from '@/lib/id';
 import { eventBus } from '@/lib/event-bus';
@@ -15,10 +15,12 @@ export async function GET(request: NextRequest) {
     if (taskId) {
       result = await db.select().from(taskLogs)
         .where(eq(taskLogs.taskId, taskId))
-        .orderBy(desc(taskLogs.timestamp));
+        .orderBy(desc(taskLogs.timestamp))
+        .limit(500);
     } else {
       result = await db.select().from(taskLogs)
-        .orderBy(desc(taskLogs.timestamp));
+        .orderBy(desc(taskLogs.timestamp))
+        .limit(500);
     }
     return NextResponse.json(result);
   } catch (error) {
@@ -36,6 +38,12 @@ export async function POST(request: NextRequest) {
 
     if (!taskId || !action || !message) {
       return NextResponse.json({ error: 'taskId, action 和 message 为必填' }, { status: 400 });
+    }
+
+    // 外键校验：检查任务是否存在
+    const [task] = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId));
+    if (!task) {
+      return NextResponse.json({ error: '关联的任务不存在' }, { status: 404 });
     }
 
     const newLog = {

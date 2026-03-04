@@ -76,34 +76,44 @@ export async function POST(
       .from(openclawWorkspaces)
       .where(eq(openclawWorkspaces.id, file.workspaceId));
 
+    // 原子操作：更新冲突状态 + 更新文件状态
+    const newHash = createHash('sha256').update(finalContent).digest('hex').slice(0, 16);
+    const newVersion = Math.max(conflict.localVersion, conflict.remoteVersion) + 1;
+
+    const [updated] = await db.transaction(async (tx) => {
+      // 更新冲突状态
+      const [conflictResult] = await tx.update(openclawConflicts)
+        .set({
+          status: 'resolved',
+          resolution,
+          mergedContent: resolution === 'merged' ? mergedContent : null,
+          resolvedAt: new Date(),
+        })
+        .where(eq(openclawConflicts.id, id))
+        .returning();
+
+      // 更新文件状态
+      await tx.update(openclawFiles)
+        .set({
+          hash: newHash,
+          version: newVersion,
+          syncStatus: 'synced',
+          syncedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(openclawFiles.id, conflict.fileId));
+
+      return [conflictResult];
+    });
+
+    // 写入文件（事务成功后再写磁盘）
     if (workspace?.path) {
-      // 写入文件
       const filePath = join(workspace.path, file.relativePath);
+      if (!filePath.startsWith(workspace.path)) {
+        return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+      }
       writeFileSync(filePath, finalContent, 'utf-8');
     }
-
-    // 更新冲突状态
-    const [updated] = await db.update(openclawConflicts)
-      .set({
-        status: 'resolved',
-        resolution,
-        mergedContent: resolution === 'merged' ? mergedContent : null,
-        resolvedAt: new Date(),
-      })
-      .where(eq(openclawConflicts.id, id))
-      .returning();
-
-    // 更新文件状态
-    const newHash = createHash('sha256').update(finalContent).digest('hex').slice(0, 16);
-    await db.update(openclawFiles)
-      .set({
-        hash: newHash,
-        version: Math.max(conflict.localVersion, conflict.remoteVersion) + 1,
-        syncStatus: 'synced',
-        syncedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(openclawFiles.id, conflict.fileId));
 
     return NextResponse.json({ data: updated });
   } catch (error) {

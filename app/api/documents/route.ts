@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
             externalUrl: documents.externalUrl, mcpServer: documents.mcpServer,
             lastSync: documents.lastSync, syncMode: documents.syncMode,
             links: documents.links, backlinks: documents.backlinks,
+            renderTemplateId: documents.renderTemplateId, renderMode: documents.renderMode,
             createdAt: documents.createdAt, updatedAt: documents.updatedAt,
           }).from(documents);
       
@@ -72,6 +73,8 @@ export async function GET(request: NextRequest) {
         syncMode: documents.syncMode,
         links: documents.links,
         backlinks: documents.backlinks,
+        renderTemplateId: documents.renderTemplateId,
+        renderMode: documents.renderMode,
         createdAt: documents.createdAt,
         updatedAt: documents.updatedAt,
       }).from(documents).where(whereClause);
@@ -89,7 +92,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { 
       title, content, projectId, projectTags, source, type,
-      externalPlatform, externalId, externalUrl, mcpServer, syncMode
+      externalPlatform, externalId, externalUrl, mcpServer, syncMode,
+      renderTemplateId, renderMode
     } = body;
 
     if (!title) {
@@ -121,6 +125,8 @@ export async function POST(request: NextRequest) {
       lastSync: null,
       links: [],
       backlinks: [],
+      renderTemplateId: renderTemplateId || null,
+      renderMode: renderMode || 'markdown',
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -142,7 +148,9 @@ export async function POST(request: NextRequest) {
     
     // 问题 #8：POST 后通知前端刷新
     eventBus.emit({ type: 'document_update', resourceId: newDocument.id });
-    return NextResponse.json(newDocument, { status: 201 });
+    // 返回数据库中的完整数据（而非内存构造的对象）
+    const [created] = await db.select().from(documents).where(eq(documents.id, newDocument.id));
+    return NextResponse.json(created || newDocument, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to create document' }, { status: 500 });
   }

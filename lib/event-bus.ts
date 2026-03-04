@@ -9,6 +9,7 @@ export type SSEEventType =
   | 'schedule_update'
   | 'document_update'
   | 'member_update'
+  | 'project_update'
   | 'chat_session_update'
   | 'milestone_update'
   // Gateway 服务端代理事件（REQ-003）
@@ -40,8 +41,14 @@ class EventBus {
   private clients: Map<string, SSEClient> = new Map();
   private clientCounter = 0;
   private encoder = new TextEncoder();
+  // SSE 最大并发连接数限制
+  private static readonly MAX_CLIENTS = 50;
 
   addClient(controller: ReadableStreamDefaultController): string {
+    // 超过最大连接数时拒绝新连接
+    if (this.clients.size >= EventBus.MAX_CLIENTS) {
+      throw new Error(`SSE max clients exceeded (${EventBus.MAX_CLIENTS})`);
+    }
     const id = `sse_${++this.clientCounter}_${Date.now()}`;
     this.clients.set(id, { id, controller });
     return id;

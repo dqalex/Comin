@@ -15,6 +15,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '缺少 sessionId 或 role' }, { status: 400 });
     }
 
+    // 外键校验：检查 session 是否存在
+    const [session] = await db.select({ id: chatSessions.id }).from(chatSessions).where(eq(chatSessions.id, sessionId));
+    if (!session) {
+      return NextResponse.json({ error: '关联的会话不存在' }, { status: 404 });
+    }
+
     // content 允许空字符串（assistant 消息初始化时为空，后续通过 PUT 更新）
     if (content === undefined || content === null) {
       return NextResponse.json({ error: '缺少 content' }, { status: 400 });

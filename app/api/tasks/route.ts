@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       assignees: body.assignees || [],
       creatorId: body.creatorId || 'system',
       status: validateEnumWithDefault(body.status, VALID_TASK_STATUS, 'todo'),
-      progress: body.progress || 0,
+      progress: typeof body.progress === 'number' ? Math.min(100, Math.max(0, body.progress)) : 0,
       priority: validateEnumWithDefault(body.priority, VALID_PRIORITY, 'medium'),
       deadline: body.deadline ? new Date(body.deadline) : null,
       checkItems: body.checkItems || [],

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { scheduledTaskHistory } from '@/db/schema';
+import { scheduledTaskHistory, scheduledTasks } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { generateScheduleHistoryId } from '@/lib/id';
 import { validateEnum, VALID_HISTORY_STATUS, VALID_DELIVERABLE_TYPE } from '@/lib/validators';
@@ -39,6 +39,12 @@ export async function POST(request: NextRequest) {
 
     if (!scheduledTaskId || !status) {
       return NextResponse.json({ error: 'scheduledTaskId 和 status 为必填' }, { status: 400 });
+    }
+
+    // 外键校验：检查定时任务是否存在
+    const [task] = await db.select({ id: scheduledTasks.id }).from(scheduledTasks).where(eq(scheduledTasks.id, scheduledTaskId));
+    if (!task) {
+      return NextResponse.json({ error: '关联的定时任务不存在' }, { status: 404 });
     }
 
     if (!validateEnum(status, VALID_HISTORY_STATUS)) {

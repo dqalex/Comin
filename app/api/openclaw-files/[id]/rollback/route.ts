@@ -69,8 +69,7 @@ export async function POST(
     });
 
     // 写入目标版本内容
-    const filePath = join(workspace.path, file.relativePath);
-    writeFileSync(filePath, targetVersion.content, 'utf-8');
+    writeFileSync(safePath, targetVersion.content, 'utf-8');
 
     // 更新文件记录
     const newHash = createHash('sha256').update(targetVersion.content).digest('hex').slice(0, 16);

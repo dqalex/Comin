@@ -44,8 +44,8 @@ function startCleanupTimer(): void {
     }
   }, 60000); // 每分钟清理一次
   
-  // 确保进程退出时清理定时器
-  if (typeof process !== 'undefined') {
+  // 确保进程退出时清理定时器（仅 Node.js 环境）
+  if (typeof process !== 'undefined' && typeof process.on === 'function') {
     const cleanup = () => {
       if (globalObj[cleanupTimerKey]) {
         clearInterval(globalObj[cleanupTimerKey] as ReturnType<typeof setInterval>);

@@ -339,36 +339,109 @@ export const BUILTIN_RENDER_TEMPLATES: BuiltinRenderTemplate[] = [
     name: '简约报告卡片',
     description: '适用于调研报告、分析报告的简洁排版模板',
     category: 'report',
-    htmlTemplate: `<div class="report-card" style="max-width:800px;margin:0 auto;padding:48px;font-family:'PingFang SC','Helvetica Neue',sans-serif;color:#1a1a2e;background:#fff;">
-  <header style="margin-bottom:40px;border-bottom:3px solid #4f46e5;padding-bottom:24px;">
-    <h1 data-slot="title" style="font-size:28px;font-weight:700;margin:0 0 8px;color:#1a1a2e;">报告标题</h1>
-    <p data-slot="subtitle" style="font-size:16px;color:#64748b;margin:0;">副标题或日期</p>
+    htmlTemplate: `<div class="report-card">
+  <header class="report-header">
+    <div data-slot="title" data-slot-type="content"></div>
+    <div data-slot="subtitle" data-slot-type="content"></div>
   </header>
-  <section style="margin-bottom:32px;">
-    <h2 style="font-size:20px;font-weight:600;color:#4f46e5;margin:0 0 16px;padding-bottom:8px;border-bottom:1px solid #e2e8f0;">核心发现</h2>
-    <div data-slot="summary" style="font-size:15px;line-height:1.8;color:#334155;">在这里填写核心发现内容...</div>
+  <section class="report-section">
+    <div data-slot="summary" data-slot-type="content"></div>
   </section>
-  <section style="margin-bottom:32px;">
-    <h2 style="font-size:20px;font-weight:600;color:#4f46e5;margin:0 0 16px;padding-bottom:8px;border-bottom:1px solid #e2e8f0;">详细分析</h2>
-    <div data-slot="body" style="font-size:15px;line-height:1.8;color:#334155;">报告正文内容...</div>
+  <section class="report-section">
+    <div data-slot="body" data-slot-type="content"></div>
   </section>
-  <section>
-    <h2 style="font-size:20px;font-weight:600;color:#4f46e5;margin:0 0 16px;padding-bottom:8px;border-bottom:1px solid #e2e8f0;">建议与行动</h2>
-    <div data-slot="conclusion" style="font-size:15px;line-height:1.8;color:#334155;">结论和建议...</div>
+  <section class="report-section">
+    <div data-slot="conclusion" data-slot-type="content"></div>
   </section>
-  <footer style="margin-top:40px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;text-align:center;">
-    <span data-slot="footer">由 CoMind 生成</span>
+  <footer class="report-footer">
+    <div data-slot="footer" data-slot-type="content"></div>
   </footer>
 </div>`,
-    cssTemplate: '',
-    mdTemplate: `<!-- @slot:title -->\n# 报告标题\n\n<!-- @slot:subtitle -->\n报告日期\n\n<!-- @slot:summary -->\n核心发现内容\n\n<!-- @slot:body -->\n详细分析内容\n\n<!-- @slot:conclusion -->\n建议与行动\n\n<!-- @slot:footer -->\n由 CoMind 生成`,
+    cssTemplate: `.report-card {
+  max-width: 800px; margin: 0 auto; padding: 48px;
+  font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+  color: #1a1a2e; background: #fff;
+}
+.report-header {
+  margin-bottom: 40px; border-bottom: 3px solid #4f46e5; padding-bottom: 24px;
+}
+[data-slot="title"] h1 {
+  font-size: 28px; font-weight: 700; margin: 0 0 8px; color: #1a1a2e;
+}
+[data-slot="subtitle"] p {
+  font-size: 16px; color: #64748b; margin: 0;
+}
+.report-section {
+  margin-bottom: 32px;
+}
+[data-slot="summary"] h2, [data-slot="body"] h2, [data-slot="conclusion"] h2 {
+  font-size: 20px; font-weight: 600; color: #4f46e5;
+  margin: 0 0 16px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;
+}
+[data-slot="summary"], [data-slot="body"], [data-slot="conclusion"] {
+  font-size: 15px; line-height: 1.8; color: #334155;
+}
+.report-footer {
+  margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0;
+  font-size: 12px; color: #94a3b8; text-align: center;
+}`,
+    mdTemplate: `<!-- @slot:title -->
+# 报告标题
+
+<!-- @slot:subtitle -->
+报告日期
+
+<!-- @slot:summary -->
+## 核心发现
+
+- **核心发现一**：关键数据或趋势描述
+- **核心发现二**：重要变化或异常分析
+- **核心发现三**：业务影响和量化结论
+
+<!-- @slot:body -->
+## 详细分析
+
+### 背景与方法
+
+简要说明分析的背景、数据来源和方法论。
+
+### 数据分析
+
+| 指标 | 本期 | 上期 | 变化 |
+| --- | --- | --- | --- |
+| 指标A | 100 | 80 | +25% |
+| 指标B | 50 | 60 | -17% |
+
+> 注：以上数据来源于系统统计，时间范围为本报告周期。
+
+### 深度解读
+
+1. **趋势一**：对数据变化的深层解读
+2. **趋势二**：关联因素分析
+3. **趋势三**：与行业基准的对比
+
+<!-- @slot:conclusion -->
+## 建议与行动
+
+### 建议
+
+- **短期行动**：立即可执行的改进措施
+- **中期规划**：需要资源投入的优化方案
+- **长期策略**：战略层面的方向建议
+
+---
+
+*下一步*：明确责任人和时间节点，跟踪执行进展。
+
+<!-- @slot:footer -->
+由 CoMind 生成`,
     slots: {
-      title: { label: '报告标题', type: 'text', placeholder: '输入报告标题' },
-      subtitle: { label: '副标题/日期', type: 'text', placeholder: '输入副标题或报告日期' },
-      summary: { label: '核心发现', type: 'richtext', placeholder: '输入核心发现内容' },
-      body: { label: '详细分析', type: 'richtext', placeholder: '输入详细分析内容' },
-      conclusion: { label: '建议与行动', type: 'richtext', placeholder: '输入结论和建议' },
-      footer: { label: '页脚', type: 'text', placeholder: '页脚文字' },
+      title: { label: '报告标题', type: 'content', placeholder: '# 输入报告标题' },
+      subtitle: { label: '副标题/日期', type: 'content', placeholder: '输入副标题或报告日期' },
+      summary: { label: '核心发现', type: 'content', placeholder: '## 核心发现\n\n输入核心发现内容' },
+      body: { label: '详细分析', type: 'content', placeholder: '## 详细分析\n\n输入详细分析内容' },
+      conclusion: { label: '建议与行动', type: 'content', placeholder: '## 建议与行动\n\n输入结论和建议' },
+      footer: { label: '页脚', type: 'content', placeholder: '页脚文字' },
     },
     sections: [
       { id: 'header', label: '标题区', slots: ['title', 'subtitle'] },
@@ -384,49 +457,122 @@ export const BUILTIN_RENDER_TEMPLATES: BuiltinRenderTemplate[] = [
     name: '项目周报',
     description: '适用于周报/月报的结构化模板，包含数据统计和进度展示',
     category: 'report',
-    htmlTemplate: `<div class="weekly-report" style="max-width:800px;margin:0 auto;padding:40px;font-family:'PingFang SC','Helvetica Neue',sans-serif;color:#1a1a2e;background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%);">
-  <header style="text-align:center;margin-bottom:36px;">
-    <h1 data-slot="title" style="font-size:24px;font-weight:700;margin:0 0 4px;color:#1e293b;">项目周报</h1>
-    <p data-slot="period" style="font-size:14px;color:#64748b;margin:0;">2026-W01</p>
+    htmlTemplate: `<div class="weekly-report">
+  <header class="weekly-header">
+    <div data-slot="title" data-slot-type="content"></div>
+    <div data-slot="period" data-slot-type="content"></div>
   </header>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;">
-    <div style="background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-      <div style="font-size:28px;font-weight:700;color:#22c55e;" data-slot="completed">0</div>
-      <div style="font-size:13px;color:#64748b;margin-top:4px;">已完成</div>
+  <div class="weekly-stats">
+    <div class="stat-card stat-green">
+      <div data-slot="completed" data-slot-type="data" class="stat-value"></div>
+      <div class="stat-label">已完成</div>
     </div>
-    <div style="background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-      <div style="font-size:28px;font-weight:700;color:#f59e0b;" data-slot="inProgress">0</div>
-      <div style="font-size:13px;color:#64748b;margin-top:4px;">进行中</div>
+    <div class="stat-card stat-amber">
+      <div data-slot="inProgress" data-slot-type="data" class="stat-value"></div>
+      <div class="stat-label">进行中</div>
     </div>
-    <div style="background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-      <div style="font-size:28px;font-weight:700;color:#ef4444;" data-slot="issues">0</div>
-      <div style="font-size:13px;color:#64748b;margin-top:4px;">问题/风险</div>
+    <div class="stat-card stat-red">
+      <div data-slot="issues" data-slot-type="data" class="stat-value"></div>
+      <div class="stat-label">问题/风险</div>
     </div>
   </div>
-  <section style="background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-    <h2 style="font-size:16px;font-weight:600;color:#4f46e5;margin:0 0 12px;">本周成果</h2>
-    <div data-slot="achievements" style="font-size:14px;line-height:1.8;color:#334155;">成果列表...</div>
+  <section class="weekly-section">
+    <div data-slot="achievements" data-slot-type="content"></div>
   </section>
-  <section style="background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-    <h2 style="font-size:16px;font-weight:600;color:#f59e0b;margin:0 0 12px;">问题与风险</h2>
-    <div data-slot="risks" style="font-size:14px;line-height:1.8;color:#334155;">问题列表...</div>
+  <section class="weekly-section">
+    <div data-slot="risks" data-slot-type="content"></div>
   </section>
-  <section style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-    <h2 style="font-size:16px;font-weight:600;color:#22c55e;margin:0 0 12px;">下周计划</h2>
-    <div data-slot="nextPlan" style="font-size:14px;line-height:1.8;color:#334155;">计划列表...</div>
+  <section class="weekly-section">
+    <div data-slot="nextPlan" data-slot-type="content"></div>
   </section>
 </div>`,
-    cssTemplate: '',
-    mdTemplate: `<!-- @slot:title -->\n# 项目周报\n\n<!-- @slot:period -->\n2026-W01\n\n<!-- @slot:completed -->\n5\n\n<!-- @slot:inProgress -->\n3\n\n<!-- @slot:issues -->\n1\n\n<!-- @slot:achievements -->\n- 成果 1\n- 成果 2\n\n<!-- @slot:risks -->\n- 风险 1\n\n<!-- @slot:nextPlan -->\n- 计划 1\n- 计划 2`,
+    cssTemplate: `.weekly-report {
+  max-width: 800px; margin: 0 auto; padding: 40px;
+  font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+  color: #1a1a2e; background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+}
+.weekly-header {
+  text-align: center; margin-bottom: 36px;
+}
+[data-slot="title"] h1 {
+  font-size: 24px; font-weight: 700; margin: 0 0 4px; color: #1e293b;
+}
+[data-slot="period"] p {
+  font-size: 14px; color: #64748b; margin: 0;
+}
+.weekly-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px;
+}
+.stat-card {
+  background: #fff; border-radius: 12px; padding: 20px;
+  text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.stat-value { font-size: 28px; font-weight: 700; }
+.stat-green .stat-value { color: #22c55e; }
+.stat-amber .stat-value { color: #f59e0b; }
+.stat-red .stat-value { color: #ef4444; }
+.stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+.weekly-section {
+  background: #fff; border-radius: 12px; padding: 24px;
+  margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+[data-slot="achievements"] h2 {
+  font-size: 16px; font-weight: 600; color: #4f46e5; margin: 0 0 12px;
+}
+[data-slot="achievements"] { font-size: 14px; line-height: 1.8; color: #334155; }
+[data-slot="risks"] h2 {
+  font-size: 16px; font-weight: 600; color: #f59e0b; margin: 0 0 12px;
+}
+[data-slot="risks"] { font-size: 14px; line-height: 1.8; color: #334155; }
+[data-slot="nextPlan"] h2 {
+  font-size: 16px; font-weight: 600; color: #22c55e; margin: 0 0 12px;
+}
+[data-slot="nextPlan"] { font-size: 14px; line-height: 1.8; color: #334155; }`,
+    mdTemplate: `<!-- @slot:title -->
+# 项目周报
+
+<!-- @slot:period -->
+2026-W01
+
+<!-- @slot:completed -->
+5
+
+<!-- @slot:inProgress -->
+3
+
+<!-- @slot:issues -->
+1
+
+<!-- @slot:achievements -->
+## 本周成果
+
+- **功能开发**：完成用户认证模块重构，支持 OAuth 2.0
+- **性能优化**：首屏加载时间从 2.8s 降至 1.2s
+- **Bug 修复**：修复 3 个 P1 级别问题
+
+> 本周完成率 **83%**，超出预期目标。
+
+<!-- @slot:risks -->
+## 问题与风险
+
+- **性能瓶颈**：数据库查询在高并发下响应时间 > 2s，需优化索引
+- ~~资源不足~~：已协调到额外支持，风险已解除
+
+<!-- @slot:nextPlan -->
+## 下周计划
+
+1. **高优先**：完成 API 接口联调和集成测试
+2. **中优先**：优化数据库索引，目标 P99 < 500ms
+3. **低优先**：补充单元测试覆盖率至 80%+`,
     slots: {
-      title: { label: '报告标题', type: 'text', placeholder: '项目周报' },
-      period: { label: '周期', type: 'text', placeholder: '2026-W01' },
+      title: { label: '报告标题', type: 'content', placeholder: '# 项目周报' },
+      period: { label: '周期', type: 'content', placeholder: '2026-W01' },
       completed: { label: '已完成数', type: 'data', placeholder: '0' },
       inProgress: { label: '进行中数', type: 'data', placeholder: '0' },
       issues: { label: '问题数', type: 'data', placeholder: '0' },
-      achievements: { label: '本周成果', type: 'richtext', placeholder: '列出主要成果' },
-      risks: { label: '问题与风险', type: 'richtext', placeholder: '列出问题和风险' },
-      nextPlan: { label: '下周计划', type: 'richtext', placeholder: '列出下周计划' },
+      achievements: { label: '本周成果', type: 'content', placeholder: '## 本周成果\n\n列出主要成果' },
+      risks: { label: '问题与风险', type: 'content', placeholder: '## 问题与风险\n\n列出问题和风险' },
+      nextPlan: { label: '下周计划', type: 'content', placeholder: '## 下周计划\n\n列出下周计划' },
     },
     sections: [
       { id: 'header', label: '标题', slots: ['title', 'period'] },
@@ -442,29 +588,78 @@ export const BUILTIN_RENDER_TEMPLATES: BuiltinRenderTemplate[] = [
     name: '社交媒体卡片',
     description: '适用于微博/公众号/小红书等平台的内容分享卡片',
     category: 'card',
-    htmlTemplate: `<div class="social-card" style="width:640px;margin:0 auto;border-radius:16px;overflow:hidden;font-family:'PingFang SC','Helvetica Neue',sans-serif;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-  <div style="height:200px;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);display:flex;align-items:center;justify-content:center;padding:32px;">
-    <div style="text-align:center;">
-      <h1 data-slot="headline" style="font-size:28px;font-weight:700;color:#fff;margin:0 0 8px;text-shadow:0 2px 4px rgba(0,0,0,0.15);">标题文字</h1>
-      <p data-slot="tagline" style="font-size:16px;color:rgba(255,255,255,0.85);margin:0;">副标题</p>
+    htmlTemplate: `<div class="social-card">
+  <div class="social-hero">
+    <div class="social-hero-inner">
+      <div data-slot="headline" data-slot-type="content"></div>
+      <div data-slot="tagline" data-slot-type="content"></div>
     </div>
   </div>
-  <div style="padding:24px 32px;">
-    <div data-slot="content" style="font-size:15px;line-height:1.8;color:#334155;margin-bottom:20px;">正文内容，支持富文本...</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid #f1f5f9;">
-      <span data-slot="author" style="font-size:13px;color:#64748b;">作者名</span>
-      <span data-slot="date" style="font-size:13px;color:#94a3b8;">日期</span>
+  <div class="social-body">
+    <div data-slot="content" data-slot-type="content"></div>
+    <div class="social-meta">
+      <div data-slot="author" data-slot-type="content" class="social-author"></div>
+      <div data-slot="date" data-slot-type="content" class="social-date"></div>
     </div>
   </div>
 </div>`,
-    cssTemplate: '',
-    mdTemplate: `<!-- @slot:headline -->\n# 标题文字\n\n<!-- @slot:tagline -->\n副标题\n\n<!-- @slot:content -->\n正文内容\n\n<!-- @slot:author -->\n作者\n\n<!-- @slot:date -->\n2026-03-03`,
+    cssTemplate: `.social-card {
+  width: 640px; margin: 0 auto; border-radius: 16px; overflow: hidden;
+  font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+  background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+.social-hero {
+  height: 200px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  display: flex; align-items: center; justify-content: center; padding: 32px;
+}
+.social-hero-inner { text-align: center; }
+[data-slot="headline"] h1 {
+  font-size: 28px; font-weight: 700; color: #fff; margin: 0 0 8px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+[data-slot="tagline"] p {
+  font-size: 16px; color: rgba(255,255,255,0.85); margin: 0;
+}
+.social-body {
+  padding: 24px 32px;
+}
+[data-slot="content"] {
+  font-size: 15px; line-height: 1.8; color: #334155; margin-bottom: 20px;
+}
+.social-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 16px; border-top: 1px solid #f1f5f9;
+}
+.social-author { font-size: 13px; color: #64748b; }
+.social-date { font-size: 13px; color: #94a3b8; }`,
+    mdTemplate: `<!-- @slot:headline -->
+# 标题文字
+
+<!-- @slot:tagline -->
+副标题
+
+<!-- @slot:content -->
+**核心观点**：用一句话概括你想传达的信息。
+
+要点速览：
+
+- 关键信息一：具体数据或案例
+- 关键信息二：独特洞察或趋势
+- 关键信息三：行动建议或结论
+
+> *一句引人深思的总结或金句。*
+
+<!-- @slot:author -->
+作者
+
+<!-- @slot:date -->
+2026-03-03`,
     slots: {
-      headline: { label: '标题', type: 'text', placeholder: '输入醒目标题' },
-      tagline: { label: '副标题', type: 'text', placeholder: '一句话描述' },
-      content: { label: '正文', type: 'richtext', placeholder: '卡片正文内容' },
-      author: { label: '作者', type: 'text', placeholder: '作者名' },
-      date: { label: '日期', type: 'text', placeholder: '2026-03-03' },
+      headline: { label: '标题', type: 'content', placeholder: '# 输入醒目标题' },
+      tagline: { label: '副标题', type: 'content', placeholder: '一句话描述' },
+      content: { label: '正文', type: 'content', placeholder: '卡片正文内容' },
+      author: { label: '作者', type: 'content', placeholder: '作者名' },
+      date: { label: '日期', type: 'content', placeholder: '2026-03-03' },
     },
     sections: [
       { id: 'hero', label: '头图区', slots: ['headline', 'tagline'] },
@@ -480,45 +675,120 @@ export const BUILTIN_RENDER_TEMPLATES: BuiltinRenderTemplate[] = [
     name: '数据洞察海报',
     description: '适用于数据分析结论展示，突出核心数字和洞察',
     category: 'poster',
-    htmlTemplate: `<div class="insight-poster" style="width:720px;margin:0 auto;padding:48px;font-family:'PingFang SC','Helvetica Neue',sans-serif;background:linear-gradient(180deg,#0f172a 0%,#1e293b 100%);color:#f8fafc;border-radius:16px;">
-  <header style="text-align:center;margin-bottom:40px;">
-    <p data-slot="category" style="font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#818cf8;margin:0 0 8px;">数据洞察</p>
-    <h1 data-slot="title" style="font-size:32px;font-weight:700;margin:0;line-height:1.3;">核心数据标题</h1>
+    htmlTemplate: `<div class="insight-poster">
+  <header class="poster-header">
+    <div data-slot="category" data-slot-type="content" class="poster-category"></div>
+    <div data-slot="title" data-slot-type="content"></div>
   </header>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:36px;">
-    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;text-align:center;">
-      <div data-slot="metric1Value" style="font-size:36px;font-weight:700;color:#22d3ee;">42%</div>
-      <div data-slot="metric1Label" style="font-size:13px;color:#94a3b8;margin-top:4px;">指标说明</div>
+  <div class="poster-metrics">
+    <div class="metric-card">
+      <div data-slot="metric1Value" data-slot-type="data" class="metric-value metric-cyan"></div>
+      <div data-slot="metric1Label" data-slot-type="content" class="metric-label"></div>
     </div>
-    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;text-align:center;">
-      <div data-slot="metric2Value" style="font-size:36px;font-weight:700;color:#a78bfa;">128</div>
-      <div data-slot="metric2Label" style="font-size:13px;color:#94a3b8;margin-top:4px;">指标说明</div>
+    <div class="metric-card">
+      <div data-slot="metric2Value" data-slot-type="data" class="metric-value metric-purple"></div>
+      <div data-slot="metric2Label" data-slot-type="content" class="metric-label"></div>
     </div>
   </div>
-  <section style="margin-bottom:32px;">
-    <h2 style="font-size:16px;font-weight:600;color:#818cf8;margin:0 0 12px;">关键洞察</h2>
-    <div data-slot="insights" style="font-size:14px;line-height:1.9;color:#cbd5e1;">洞察内容...</div>
+  <section class="poster-section">
+    <div data-slot="insights" data-slot-type="content"></div>
   </section>
-  <section>
-    <h2 style="font-size:16px;font-weight:600;color:#818cf8;margin:0 0 12px;">行动建议</h2>
-    <div data-slot="actions" style="font-size:14px;line-height:1.9;color:#cbd5e1;">建议内容...</div>
+  <section class="poster-section">
+    <div data-slot="actions" data-slot-type="content"></div>
   </section>
-  <footer style="margin-top:32px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);text-align:center;">
-    <span data-slot="source" style="font-size:11px;color:#475569;">数据来源和日期</span>
+  <footer class="poster-footer">
+    <div data-slot="source" data-slot-type="content"></div>
   </footer>
 </div>`,
-    cssTemplate: '',
-    mdTemplate: `<!-- @slot:category -->\n数据洞察\n\n<!-- @slot:title -->\n# 核心数据标题\n\n<!-- @slot:metric1Value -->\n42%\n\n<!-- @slot:metric1Label -->\n增长率\n\n<!-- @slot:metric2Value -->\n128\n\n<!-- @slot:metric2Label -->\n新增用户\n\n<!-- @slot:insights -->\n- 洞察 1\n- 洞察 2\n\n<!-- @slot:actions -->\n- 建议 1\n- 建议 2\n\n<!-- @slot:source -->\n数据来源：CoMind · 2026-03`,
+    cssTemplate: `.insight-poster {
+  width: 720px; margin: 0 auto; padding: 48px;
+  font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc; border-radius: 16px;
+}
+.poster-header {
+  text-align: center; margin-bottom: 40px;
+}
+.poster-category {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #818cf8;
+  margin-bottom: 8px;
+}
+[data-slot="title"] h1 {
+  font-size: 32px; font-weight: 700; margin: 0; line-height: 1.3; color: #f8fafc;
+}
+.poster-metrics {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 36px;
+}
+.metric-card {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 24px; text-align: center;
+}
+.metric-value { font-size: 36px; font-weight: 700; }
+.metric-cyan { color: #22d3ee; }
+.metric-purple { color: #a78bfa; }
+.metric-label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+.poster-section { margin-bottom: 32px; }
+[data-slot="insights"] h2, [data-slot="actions"] h2 {
+  font-size: 16px; font-weight: 600; color: #818cf8; margin: 0 0 12px;
+}
+[data-slot="insights"], [data-slot="actions"] {
+  font-size: 14px; line-height: 1.9; color: #cbd5e1;
+}
+[data-slot="insights"] strong, [data-slot="actions"] strong { color: #f1f5f9; }
+[data-slot="insights"] blockquote {
+  border-left-color: #818cf8; color: #94a3b8;
+}
+.poster-footer {
+  margin-top: 32px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
+}
+[data-slot="source"] { font-size: 11px; color: #475569; }`,
+    mdTemplate: `<!-- @slot:category -->
+数据洞察
+
+<!-- @slot:title -->
+# 核心数据标题
+
+<!-- @slot:metric1Value -->
+42%
+
+<!-- @slot:metric1Label -->
+增长率
+
+<!-- @slot:metric2Value -->
+128
+
+<!-- @slot:metric2Label -->
+新增用户
+
+<!-- @slot:insights -->
+## 关键洞察
+
+- **用户增长加速**：月活环比增长 42%，主要来自自然流量
+- **留存率提升**：7 日留存从 35% 提升至 48%，归因于引导流程优化
+- **转化瓶颈**：注册→首次使用转化率仅 23%，低于行业均值
+
+> 关键拐点出现在第 3 周，与产品功能迭代节奏高度吻合。
+
+<!-- @slot:actions -->
+## 行动建议
+
+1. **优先级 P0**：优化新用户引导流程，目标首次使用转化率 ≥ 40%
+2. **优先级 P1**：加大内容营销投入，巩固自然流量增长趋势
+3. **优先级 P2**：建立用户分层运营体系，针对性提升留存
+
+<!-- @slot:source -->
+数据来源：CoMind · 2026-03`,
     slots: {
-      category: { label: '分类标签', type: 'text', placeholder: '数据洞察' },
-      title: { label: '海报标题', type: 'text', placeholder: '核心数据标题' },
+      category: { label: '分类标签', type: 'content', placeholder: '数据洞察' },
+      title: { label: '海报标题', type: 'content', placeholder: '# 核心数据标题' },
       metric1Value: { label: '指标1数值', type: 'data', placeholder: '42%' },
-      metric1Label: { label: '指标1说明', type: 'text', placeholder: '增长率' },
+      metric1Label: { label: '指标1说明', type: 'content', placeholder: '增长率' },
       metric2Value: { label: '指标2数值', type: 'data', placeholder: '128' },
-      metric2Label: { label: '指标2说明', type: 'text', placeholder: '新增用户' },
-      insights: { label: '关键洞察', type: 'richtext', placeholder: '输入洞察内容' },
-      actions: { label: '行动建议', type: 'richtext', placeholder: '输入建议内容' },
-      source: { label: '数据来源', type: 'text', placeholder: '数据来源和日期' },
+      metric2Label: { label: '指标2说明', type: 'content', placeholder: '新增用户' },
+      insights: { label: '关键洞察', type: 'content', placeholder: '## 关键洞察\n\n输入洞察内容' },
+      actions: { label: '行动建议', type: 'content', placeholder: '## 行动建议\n\n输入建议内容' },
+      source: { label: '数据来源', type: 'content', placeholder: '数据来源和日期' },
     },
     sections: [
       { id: 'header', label: '标题区', slots: ['category', 'title'] },

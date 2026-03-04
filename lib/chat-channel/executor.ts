@@ -53,6 +53,17 @@ import {
   handleGetTemplate,
   handleListTemplates,
 } from '@/app/api/mcp/handlers/template.handler';
+import {
+  handleAdvanceSopStage,
+  handleRequestSopConfirm,
+  handleGetSopContext,
+  handleSaveStageOutput,
+  handleUpdateKnowledge,
+  handleCreateSopTemplate,
+  handleUpdateSopTemplate,
+  handleCreateRenderTemplate,
+  handleUpdateRenderTemplate,
+} from '@/app/api/mcp/handlers/sop.handler';
 
 // 导入 Store 刷新
 import { useTaskStore } from '@/store/task.store';
@@ -62,6 +73,8 @@ import { useMemberStore } from '@/store/member.store';
 import { useOpenClawStatusStore } from '@/store/openclaw.store';
 import { useScheduledTaskStore } from '@/store/schedule.store';
 import { useDeliveryStore } from '@/store/delivery.store';
+import { useSOPTemplateStore } from '@/store/sop-template.store';
+import { useRenderTemplateStore } from '@/store/render-template.store';
 
 // ============================================================================
 // 执行器
@@ -489,6 +502,110 @@ async function executeHandler(
       result = await handleGetMcpToken({
         member_id: action.member_id || options.memberId,
       });
+      break;
+
+    // ============ SOP 类 ============
+    
+    case 'advance_sop_stage':
+      result = await handleAdvanceSopStage({
+        task_id: action.task_id,
+        stage_output: action.stage_output,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useTaskStore.getState().fetchTasks();
+      }
+      break;
+    
+    case 'request_sop_confirm':
+      result = await handleRequestSopConfirm({
+        task_id: action.task_id,
+        confirm_message: action.confirm_message,
+        stage_output: action.stage_output,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useTaskStore.getState().fetchTasks();
+      }
+      break;
+    
+    case 'get_sop_context':
+      result = await handleGetSopContext({
+        task_id: action.task_id,
+      });
+      break;
+    
+    case 'save_stage_output':
+      result = await handleSaveStageOutput({
+        task_id: action.task_id,
+        output: action.output,
+        output_type: action.output_type,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useTaskStore.getState().fetchTasks();
+      }
+      break;
+    
+    case 'update_knowledge':
+      result = await handleUpdateKnowledge({
+        document_id: action.document_id,
+        content: action.content,
+        layer: action.layer,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useDocumentStore.getState().fetchDocuments();
+      }
+      break;
+    
+    case 'create_sop_template':
+      result = await handleCreateSopTemplate({
+        name: action.name,
+        stages: action.stages,
+        category: action.category,
+        system_prompt: action.system_prompt,
+        required_tools: action.required_tools,
+        quality_checklist: action.quality_checklist,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useSOPTemplateStore.getState().fetchTemplates();
+      }
+      break;
+    
+    case 'update_sop_template':
+      result = await handleUpdateSopTemplate({
+        template_id: action.template_id,
+        name: action.name,
+        stages: action.stages,
+        category: action.category,
+        system_prompt: action.system_prompt,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useSOPTemplateStore.getState().fetchTemplates();
+      }
+      break;
+    
+    case 'create_render_template':
+      result = await handleCreateRenderTemplate({
+        name: action.name,
+        html_template: action.html_template,
+        category: action.category,
+        slots: action.slots,
+        sections: action.sections,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useRenderTemplateStore.getState().fetchTemplates();
+      }
+      break;
+    
+    case 'update_render_template':
+      result = await handleUpdateRenderTemplate({
+        template_id: action.template_id,
+        name: action.name,
+        html_template: action.html_template,
+        slots: action.slots,
+        sections: action.sections,
+      });
+      if (result.success && options.triggerRefresh !== false) {
+        await useRenderTemplateStore.getState().fetchTemplates();
+      }
       break;
     
     case 'custom_action':

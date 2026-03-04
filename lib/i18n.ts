@@ -243,6 +243,9 @@ const resources = {
         // OpenClaw edit
         conflictError: 'File has been modified by another program, please refresh and try again',
         chatWithAI: 'Chat with AI',
+        // Render template
+        renderTemplate: 'Template', changeTemplate: 'Change Template', noTemplate: 'No Template', removeTemplate: 'Remove Template',
+        templateLocked: 'Template cannot be changed after binding (different templates have incompatible slot definitions)',
       },
       milestones: {
         title: 'Milestones', milestone: 'Milestone', noMilestones: 'No milestones',
@@ -262,7 +265,7 @@ const resources = {
         all: 'All', content: 'Content', analysis: 'Analysis', research: 'Research',
         development: 'Development', operations: 'Operations', media: 'Media', custom: 'Custom',
         // Status
-        draft: 'Draft', active: 'Active', archived: 'Archived',
+        status: 'Status', draft: 'Draft', active: 'Active', archived: 'Archived',
         // Template card
         stages: 'stages', noTemplates: 'No SOP templates',
         noTemplatesHint: 'Create templates to standardize AI workflows',
@@ -334,6 +337,11 @@ const resources = {
         report: 'Report', card: 'Card', poster: 'Poster', presentation: 'Presentation', custom: 'Custom',
         noTemplates: 'No render templates', noTemplatesHint: 'Create templates for document visualization',
         slots: 'slots',
+        previewTab: 'Preview', codeTab: 'Code', slotsTab: 'Slots',
+        aiCreate: 'AI Create', aiCreateHint: 'Describe the template you want, AI will create it for you',
+        aiCreatePlaceholder: 'Describe the visual template you need, e.g.: a blue gradient tech-style data dashboard card with 3 metric areas + summary section...',
+        aiCreateSending: 'Sending to AI...',
+        aiCreateSent: 'Request sent, AI is working on it',
       },
       studio: {
         preview: 'Preview', edit: 'Edit', fitToWindow: 'Fit to Window', noContent: 'No content to preview',
@@ -352,6 +360,17 @@ const resources = {
         visualMode: 'Visual', renderTemplate: 'Render Template',
         noTemplate: 'No template', templateHint: 'Select a render template for visual editing',
         openInStudio: 'Open in Content Studio', renderStageHint: 'This render stage requires visual editing',
+        templatePreview: 'Template Preview', templateWithExample: 'Template will auto-fill example content',
+        templateVisual: 'Template Visual', templateVisualShort: 'Visual',
+        visualEdit: 'Visual Edit', propertyPanel: 'Property Panel',
+      },
+      sopEditor: {
+        mdEditMode: 'Markdown Edit', formEditMode: 'Form Edit',
+        importSkill: 'Import Skill', importSkillHint: 'Import an existing Skill YAML+Markdown file as SOP template',
+        importSkillPlaceholder: 'Paste Skill Markdown content here (supports --- frontmatter --- syntax)...',
+        parseSkill: 'Parse & Import', parseSuccess: 'Skill parsed successfully',
+        parseError: 'Parse failed: invalid Skill format',
+        mdPlaceholder: '# Template Name\n\nEnter SOP template content in Markdown...\n\n## Stage 1: Data Collection\n- type: ai_auto\n- prompt: ...\n\n## Stage 2: Analysis\n- type: ai_with_confirm',
       },
     },
   },
@@ -590,6 +609,8 @@ const resources = {
         // OpenClaw edit
         conflictError: '文件已被其他程序修改，请刷新后重试',
         chatWithAI: '与 AI 讨论',
+        // 渲染模板
+        renderTemplate: '模板', changeTemplate: '更换模板', noTemplate: '无模板', removeTemplate: '移除模板',
       },
       milestones: {
         title: '里程碑', milestone: '里程碑', noMilestones: '暂无里程碑',
@@ -609,7 +630,7 @@ const resources = {
         all: '全部', content: '内容制作', analysis: '数据分析', research: '调研',
         development: '开发', operations: '运营', media: '多媒体', custom: '自定义',
         // 状态
-        draft: '草稿', active: '已启用', archived: '已归档',
+        status: '状态', draft: '草稿', active: '已启用', archived: '已归档',
         // 模板卡片
         stages: '阶段', noTemplates: '暂无 SOP 模板',
         noTemplatesHint: '创建模板来标准化 AI 工作流程',
@@ -681,9 +702,14 @@ const resources = {
         report: '报告', card: '卡片', poster: '海报', presentation: '演示', custom: '自定义',
         noTemplates: '暂无渲染模板', noTemplatesHint: '创建模板用于文档可视化',
         slots: '个槽位',
+        previewTab: '预览', codeTab: '代码', slotsTab: '槽位',
+        aiCreate: 'AI 创建', aiCreateHint: '描述你想要的模板，AI 将为你创建',
+        aiCreatePlaceholder: '描述你需要的可视化模板，例如：一个蓝色渐变科技风格的数据面板卡片，包含 3 个指标区域 + 摘要区...',
+        aiCreateSending: '正在发送给 AI...',
+        aiCreateSent: '请求已发送，AI 正在制作中',
       },
       studio: {
-        preview: '预览', edit: '编辑', fitToWindow: '适应窗口', noContent: '暂无内容可预览',
+        preview: '预览', edit: '编辑', visualEdit: '可视化编辑', fitToWindow: '适应窗口', noContent: '暂无内容可预览',
         selectElement: '在预览中点击元素以编辑属性',
         fontSize: '字号', fontWeight: '字重', textColor: '文字颜色',
         backgroundColor: '背景色', textAlign: '对齐方式',
@@ -699,6 +725,17 @@ const resources = {
         visualMode: '可视化', renderTemplate: '渲染模板',
         noTemplate: '无模板', templateHint: '选择渲染模板以进行可视化编辑',
         openInStudio: '在 Studio 中编辑', renderStageHint: '该渲染阶段需要可视化编辑',
+        templatePreview: '模板预览', templateWithExample: '模板将自动填充示例内容',
+        templateVisual: '模板可视化', templateVisualShort: '可视化',
+        htmlView: '模板可视化', mdView: 'MD 预览', propertyPanel: '属性面板',
+      },
+      sopEditor: {
+        mdEditMode: 'Markdown 编辑', formEditMode: '表单编辑',
+        importSkill: '导入 Skill', importSkillHint: '导入已有的 Skill YAML+Markdown 文件作为 SOP 模板',
+        importSkillPlaceholder: '在此粘贴 Skill Markdown 内容（支持 --- frontmatter --- 语法）...',
+        parseSkill: '解析并导入', parseSuccess: 'Skill 解析成功',
+        parseError: '解析失败：无效的 Skill 格式',
+        mdPlaceholder: '# 模板名称\n\n输入 SOP 模板的 Markdown 内容...\n\n## 阶段 1：数据收集\n- type: ai_auto\n- prompt: ...\n\n## 阶段 2：分析\n- type: ai_with_confirm',
       },
     },
   },

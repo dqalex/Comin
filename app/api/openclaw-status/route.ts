@@ -39,7 +39,14 @@ export async function POST(request: NextRequest) {
     ];
     const safeData: Record<string, unknown> = {};
     for (const field of allowedFields) {
-      if (data[field] !== undefined) safeData[field] = data[field];
+      if (data[field] !== undefined) {
+        // progress 范围校验：0-100
+        if (field === 'progress' && typeof data[field] === 'number') {
+          safeData[field] = Math.min(100, Math.max(0, data[field]));
+        } else {
+          safeData[field] = data[field];
+        }
+      }
     }
 
     const dateFields = ['startedAt', 'estimatedEndAt', 'lastHeartbeat'];

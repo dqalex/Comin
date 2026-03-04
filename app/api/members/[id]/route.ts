@@ -85,6 +85,9 @@ export async function PUT(
         // Token 加密存储
         if (field === 'openclawApiToken' && typeof body[field] === 'string') {
           updateData[field] = encryptToken(body[field]);
+        } else if (field === 'openclawTemperature' && typeof body[field] === 'number') {
+          // temperature 范围校验：0.0-2.0
+          updateData[field] = Math.min(2.0, Math.max(0, body[field]));
         } else {
           updateData[field] = body[field];
         }

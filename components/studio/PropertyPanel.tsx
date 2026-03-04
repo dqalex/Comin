@@ -133,7 +133,7 @@ export default function PropertyPanel({
   }
 
   const isImage = selection.slotType === 'image';
-  const isText = selection.slotType === 'text' || selection.slotType === 'richtext';
+  const isText = selection.slotType === 'content' || selection.slotType === 'text' || selection.slotType === 'richtext';
 
   return (
     <div className={clsx('flex flex-col h-full overflow-y-auto', className)}>

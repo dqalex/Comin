@@ -91,7 +91,8 @@ export async function PUT(
     const allowedFields = [
       'title', 'content', 'projectId', 'projectTags', 'type',
       'externalPlatform', 'externalId', 'externalUrl', 'mcpServer',
-      'syncMode', 'lastSync', 'links', 'backlinks'
+      'syncMode', 'lastSync', 'links', 'backlinks',
+      'renderTemplateId', 'renderMode', 'htmlContent', 'slotData'
     ];
     
     for (const field of allowedFields) {

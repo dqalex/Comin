@@ -14,7 +14,7 @@ export async function GET(
   try {
     const { id } = await params;
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '10') || 10, 100);
 
     // 校验文件存在性
     const [file] = await db.select()

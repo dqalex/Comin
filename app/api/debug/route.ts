@@ -435,8 +435,18 @@ const TABLE_COLUMNS: Record<string, [string, string][]> = {
   ],
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // 鉴权：生产环境必须携带有效的 COMIND_API_TOKEN
+    if (process.env.NODE_ENV === 'production') {
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.replace('Bearer ', '');
+      const expectedToken = process.env.COMIND_API_TOKEN;
+      if (!expectedToken || token !== expectedToken) {
+        return NextResponse.json({ error: 'Unauthorized: valid COMIND_API_TOKEN required' }, { status: 401 });
+      }
+    }
+
     const diagnostics: Record<string, any> = {};
 
     // 1. 数据库健康检查
@@ -613,6 +623,16 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    // 鉴权：生产环境必须携带有效的 COMIND_API_TOKEN
+    if (process.env.NODE_ENV === 'production') {
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.replace('Bearer ', '');
+      const expectedToken = process.env.COMIND_API_TOKEN;
+      if (!expectedToken || token !== expectedToken) {
+        return NextResponse.json({ error: 'Unauthorized: valid COMIND_API_TOKEN required' }, { status: 401 });
+      }
+    }
+
     const body = await request.json();
     const { action } = body;
 

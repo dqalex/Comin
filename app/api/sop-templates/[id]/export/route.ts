@@ -15,36 +15,41 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  try {
+    const { id } = await params;
 
-  const template = await db.query.sopTemplates.findFirst({
-    where: eq(sopTemplates.id, id),
-  });
+    const template = await db.query.sopTemplates.findFirst({
+      where: eq(sopTemplates.id, id),
+    });
 
-  if (!template) {
-    return NextResponse.json({ error: 'SOP 模板不存在' }, { status: 404 });
+    if (!template) {
+      return NextResponse.json({ error: 'SOP 模板不存在' }, { status: 404 });
+    }
+
+    // 导出格式：剥离数据库特定字段，保留模板定义
+    const exportData = {
+      _format: 'comind-sop-template',
+      _version: '1.0',
+      _exportedAt: new Date().toISOString(),
+      name: template.name,
+      description: template.description,
+      category: template.category,
+      icon: template.icon,
+      stages: template.stages,
+      requiredTools: template.requiredTools,
+      systemPrompt: template.systemPrompt,
+      knowledgeConfig: template.knowledgeConfig,
+      outputConfig: template.outputConfig,
+      qualityChecklist: template.qualityChecklist,
+    };
+
+    return NextResponse.json(exportData, {
+      headers: {
+        'Content-Disposition': `attachment; filename="sop-${template.name}.json"`,
+      },
+    });
+  } catch (error) {
+    console.error('[API] GET /sop-templates/[id]/export error:', error);
+    return NextResponse.json({ error: '导出 SOP 模板失败' }, { status: 500 });
   }
-
-  // 导出格式：剥离数据库特定字段，保留模板定义
-  const exportData = {
-    _format: 'comind-sop-template',
-    _version: '1.0',
-    _exportedAt: new Date().toISOString(),
-    name: template.name,
-    description: template.description,
-    category: template.category,
-    icon: template.icon,
-    stages: template.stages,
-    requiredTools: template.requiredTools,
-    systemPrompt: template.systemPrompt,
-    knowledgeConfig: template.knowledgeConfig,
-    outputConfig: template.outputConfig,
-    qualityChecklist: template.qualityChecklist,
-  };
-
-  return NextResponse.json(exportData, {
-    headers: {
-      'Content-Disposition': `attachment; filename="sop-${template.name}.json"`,
-    },
-  });
 }

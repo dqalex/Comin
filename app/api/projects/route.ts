@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     await db.insert(projects).values(newProject);
     // 用 API 返回数据库中的完整数据
     const [created] = await db.select().from(projects).where(eq(projects.id, newProject.id));
-    eventBus.emit({ type: 'task_update', resourceId: newProject.id });
+    eventBus.emit({ type: 'project_update', resourceId: newProject.id });
     return NextResponse.json(created || newProject, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to create project' }, { status: 500 });

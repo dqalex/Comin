@@ -4,7 +4,7 @@ import * as schema from './schema';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync, copyFileSync, readFileSync } from 'fs';
 import { BUILTIN_SOP_TEMPLATES, BUILTIN_RENDER_TEMPLATES } from './builtin-templates';
-import { isUuidFormat, uuidToBase58 } from '@/lib/id';
+import { migrateUuidToBase58 } from './migrations';
 
 /**
  * 数据库路径计算（解决 Next.js standalone 模式下的路径问题）
@@ -194,12 +194,13 @@ if (tables.length === 0) {
       message TEXT NOT NULL,
       timestamp INTEGER NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS comments (
+    CREATE TABLE IF NOT EXISTS task_comments (
       id TEXT PRIMARY KEY NOT NULL,
       task_id TEXT NOT NULL REFERENCES tasks(id),
-      author_id TEXT NOT NULL,
+      member_id TEXT NOT NULL,
       content TEXT NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS documents (
       id TEXT PRIMARY KEY NOT NULL,
@@ -411,7 +412,7 @@ if (tables.length === 0) {
     CREATE INDEX IF NOT EXISTS idx_milestones_project_id ON milestones(project_id);
     CREATE INDEX IF NOT EXISTS idx_milestones_status ON milestones(status);
     CREATE INDEX IF NOT EXISTS idx_task_logs_task_id ON task_logs(task_id);
-    CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id);
+    CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id);
     CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
     CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
     CREATE INDEX IF NOT EXISTS idx_openclaw_status_member_id ON openclaw_status(member_id);
@@ -569,6 +570,25 @@ if (tables.length === 0) {
   const taskColNames = taskCols.map(c => c.name);
   if (taskColNames.includes('cowork_mode')) {
     console.log('[CoMind] Found v1 "cowork_mode" column in tasks — ignored (Drizzle skips unknown columns)');
+  }
+
+  // 2.5 处理 comments → task_comments 表名迁移
+  if (tableNames.includes('comments') && !tableNames.includes('task_comments')) {
+    console.log('[CoMind] Renaming "comments" → "task_comments"...');
+    try {
+      sqlite.exec('ALTER TABLE comments RENAME TO task_comments');
+      // 补齐 member_id 列（旧表可能用 author_id）
+      const tcCols = sqlite.prepare("PRAGMA table_info(task_comments)").all() as { name: string }[];
+      const tcColNames = tcCols.map(c => c.name);
+      if (!tcColNames.includes('member_id') && tcColNames.includes('author_id')) {
+        sqlite.exec('ALTER TABLE task_comments RENAME COLUMN author_id TO member_id');
+      }
+      if (!tcColNames.includes('updated_at')) {
+        sqlite.exec('ALTER TABLE task_comments ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0');
+      }
+    } catch (err) {
+      console.error('[CoMind] comments → task_comments migration failed:', err);
+    }
   }
 
   // 3. 确保所有必需表存在（V1 中可能没有 openclaw_status / scheduled_tasks / scheduled_task_history）
@@ -1047,6 +1067,75 @@ if (tables.length === 0) {
 
   console.log('[CoMind] V1/V2 compatibility migration complete.');
 
+  // v3.0: 检查 sop_templates/render_templates 表 schema 是否为旧版
+  // 旧版（v2）的 sop_templates 有 'version'/'is_system' 列，缺少 'icon'/'status'
+  if (tableNames.includes('sop_templates')) {
+    const sopCols = sqlite.prepare("PRAGMA table_info(sop_templates)").all() as { name: string }[];
+    const sopColNames = sopCols.map(c => c.name);
+    if (!sopColNames.includes('icon') || !sopColNames.includes('status')) {
+      console.log('[CoMind] Detected old sop_templates schema, rebuilding...');
+      try {
+        sqlite.exec('DROP TABLE IF EXISTS sop_templates');
+        sqlite.exec(`
+          CREATE TABLE sop_templates (
+            id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'custom', icon TEXT DEFAULT 'clipboard-list',
+            status TEXT NOT NULL DEFAULT 'active', stages TEXT NOT NULL DEFAULT '[]',
+            required_tools TEXT DEFAULT '[]', system_prompt TEXT DEFAULT '',
+            knowledge_config TEXT, output_config TEXT, quality_checklist TEXT DEFAULT '[]',
+            is_builtin INTEGER NOT NULL DEFAULT 0, project_id TEXT REFERENCES projects(id),
+            created_by TEXT NOT NULL DEFAULT 'system', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_sop_templates_category ON sop_templates(category);
+          CREATE INDEX IF NOT EXISTS idx_sop_templates_status ON sop_templates(status);
+        `);
+        const now = Date.now();
+        const insertSop = sqlite.prepare(
+          `INSERT OR IGNORE INTO sop_templates (id, name, description, category, icon, status, stages, system_prompt, quality_checklist, is_builtin, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (const t of BUILTIN_SOP_TEMPLATES) {
+          insertSop.run(t.id, t.name, t.description, t.category, t.icon, 'active', JSON.stringify(t.stages), t.systemPrompt, JSON.stringify(t.qualityChecklist), 1, 'system', now, now);
+        }
+        console.log(`[CoMind] Rebuilt sop_templates and seeded ${BUILTIN_SOP_TEMPLATES.length} builtin templates.`);
+      } catch (err) {
+        console.error('[CoMind] Failed to rebuild sop_templates:', err);
+      }
+    }
+  }
+  if (tableNames.includes('render_templates')) {
+    const rtCols = sqlite.prepare("PRAGMA table_info(render_templates)").all() as { name: string }[];
+    const rtColNames = rtCols.map(c => c.name);
+    if (!rtColNames.includes('md_template') || !rtColNames.includes('slots')) {
+      console.log('[CoMind] Detected old render_templates schema, rebuilding...');
+      try {
+        sqlite.exec('DROP TABLE IF EXISTS render_templates');
+        sqlite.exec(`
+          CREATE TABLE render_templates (
+            id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'custom', status TEXT NOT NULL DEFAULT 'active',
+            html_template TEXT NOT NULL DEFAULT '', md_template TEXT NOT NULL DEFAULT '',
+            css_template TEXT, slots TEXT NOT NULL DEFAULT '{}', sections TEXT NOT NULL DEFAULT '[]',
+            export_config TEXT NOT NULL DEFAULT '{"formats":["jpg","html"]}', thumbnail TEXT,
+            is_builtin INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT 'system',
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_render_templates_category ON render_templates(category);
+          CREATE INDEX IF NOT EXISTS idx_render_templates_status ON render_templates(status);
+        `);
+        const now = Date.now();
+        const insertRt = sqlite.prepare(
+          `INSERT OR IGNORE INTO render_templates (id, name, description, category, status, html_template, css_template, md_template, slots, sections, export_config, is_builtin, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (const t of BUILTIN_RENDER_TEMPLATES) {
+          insertRt.run(t.id, t.name, t.description, t.category, 'active', t.htmlTemplate, t.cssTemplate, t.mdTemplate, JSON.stringify(t.slots), JSON.stringify(t.sections), JSON.stringify(t.exportConfig), 1, 'system', now, now);
+        }
+        console.log(`[CoMind] Rebuilt render_templates and seeded ${BUILTIN_RENDER_TEMPLATES.length} builtin templates.`);
+      } catch (err) {
+        console.error('[CoMind] Failed to rebuild render_templates:', err);
+      }
+    }
+  }
+
   // 确保 deliveries 表有所有必需列
   if (tableNames.includes('deliveries')) {
     const deliveryCols = sqlite.prepare("PRAGMA table_info(deliveries)").all() as { name: string }[];
@@ -1118,6 +1207,10 @@ if (tables.length === 0) {
     { name: 'idx_tasks_sop_template_id', sql: 'CREATE INDEX IF NOT EXISTS idx_tasks_sop_template_id ON tasks(sop_template_id)' },
     { name: 'idx_documents_render_mode', sql: 'CREATE INDEX IF NOT EXISTS idx_documents_render_mode ON documents(render_mode)' },
     { name: 'idx_documents_render_template_id', sql: 'CREATE INDEX IF NOT EXISTS idx_documents_render_template_id ON documents(render_template_id)' },
+    // 缺失索引补充
+    { name: 'idx_scheduled_tasks_enabled', sql: 'CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_enabled ON scheduled_tasks(enabled)' },
+    { name: 'idx_openclaw_files_relative_path', sql: 'CREATE INDEX IF NOT EXISTS idx_openclaw_files_relative_path ON openclaw_files(relative_path)' },
+    { name: 'idx_chat_sessions_updated_at', sql: 'CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated_at ON chat_sessions(updated_at)' },
   ];
   
   for (const idx of newIndexes) {
@@ -1225,206 +1318,32 @@ if (tables.length === 0) {
     }
   }
 
+  // ===== 内置模板升级（幂等，每次启动检查） =====
+  // 内置模板使用 INSERT OR IGNORE 创建，但 mdTemplate/htmlTemplate 等可能在版本升级中更新
+  // 用 UPDATE ... WHERE is_builtin = 1 确保只更新内置模板，不影响用户自定义模板
+  if (tableNames.includes('render_templates')) {
+    try {
+      const updateRt = sqlite.prepare(
+        `UPDATE render_templates SET md_template = ?, html_template = ?, css_template = ?, slots = ?, sections = ?, export_config = ?, updated_at = ? WHERE id = ? AND is_builtin = 1`
+      );
+      const now = Date.now();
+      let updated = 0;
+      for (const t of BUILTIN_RENDER_TEMPLATES) {
+        const result = updateRt.run(t.mdTemplate, t.htmlTemplate, t.cssTemplate, JSON.stringify(t.slots), JSON.stringify(t.sections), JSON.stringify(t.exportConfig), now, t.id);
+        if (result.changes > 0) updated++;
+      }
+      if (updated > 0) {
+        console.log(`[CoMind] Upgraded ${updated} builtin render templates.`);
+      }
+    } catch (err) {
+      console.error('[CoMind] Failed to upgrade builtin render templates:', err);
+    }
+  }
+
   // ===== UUID → Base58 ID 迁移 =====
-  migrateUuidToBase58();
+  migrateUuidToBase58(sqlite);
 
 } // end of initialization guard
-
-/**
- * UUID → Base58 ID 迁移
- * 自动检测并转换数据库中所有 UUID 格式的 ID
- */
-function migrateUuidToBase58() {
-  // 检查是否已有迁移记录
-  const metaTable = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migration_meta'").get();
-  if (metaTable) {
-    const migrated = sqlite.prepare("SELECT value FROM migration_meta WHERE key = 'uuid_to_base58'").get() as { value: string } | undefined;
-    if (migrated?.value === 'done') {
-      return; // 已完成迁移
-    }
-  }
-  
-  // 检查是否有需要迁移的 UUID
-  const hasUuid = sqlite.prepare("SELECT id FROM documents WHERE id LIKE '%-%-%-%-%' LIMIT 1").get();
-  if (!hasUuid) {
-    return; // 没有需要迁移的数据
-  }
-  
-  console.log('[CoMind] Migrating: UUID → Base58 ID conversion...');
-  
-  // ID 映射表（UUID → Base58）
-  const idMap = new Map<string, string>();
-  
-  // 辅助函数：转换 ID
-  const convertId = (id: string | null): string | null => {
-    if (!id) return null;
-    if (isUuidFormat(id)) {
-      let newId = idMap.get(id);
-      if (!newId) {
-        newId = uuidToBase58(id);
-        idMap.set(id, newId);
-      }
-      return newId;
-    }
-    return id;
-  };
-  
-  // 辅助函数：转换 JSON 数组中的 ID
-  const convertJsonIds = (jsonStr: string | null): string | null => {
-    if (!jsonStr) return null;
-    try {
-      const arr = JSON.parse(jsonStr);
-      if (!Array.isArray(arr)) return jsonStr;
-      
-      let changed = false;
-      const newArr = arr.map(item => {
-        if (typeof item === 'string') {
-          if (isUuidFormat(item)) {
-            changed = true;
-            return convertId(item);
-          }
-          if (item.startsWith('doc:') || item.startsWith('sync:')) {
-            const prefix = item.slice(0, 4);
-            const id = item.slice(4);
-            if (isUuidFormat(id)) {
-              changed = true;
-              return `${prefix}${convertId(id)}`;
-            }
-          }
-          return item;
-        } else if (typeof item === 'object' && item !== null) {
-          const newObj = { ...item };
-          if (newObj.id && typeof newObj.id === 'string' && isUuidFormat(newObj.id)) {
-            newObj.id = convertId(newObj.id);
-            changed = true;
-          }
-          return newObj;
-        }
-        return item;
-      });
-      
-      return changed ? JSON.stringify(newArr) : jsonStr;
-    } catch {
-      return jsonStr;
-    }
-  };
-  
-  try {
-    sqlite.exec('BEGIN TRANSACTION');
-    
-    // === 迁移顺序：先迁移被引用的表，再迁移引用它的表 ===
-    
-    // 1. 迁移 members 表（被多个表引用）
-    const membersData = sqlite.prepare('SELECT id FROM members').all() as any[];
-    for (const member of membersData) {
-      const newId = convertId(member.id);
-      if (newId !== member.id) {
-        // 先更新所有引用 members.id 的外键
-        sqlite.prepare('UPDATE tasks SET creator_id = ? WHERE creator_id = ?').run(newId, member.id);
-        sqlite.prepare('UPDATE comments SET author_id = ? WHERE author_id = ?').run(newId, member.id);
-        sqlite.prepare('UPDATE scheduled_tasks SET member_id = ? WHERE member_id = ?').run(newId, member.id);
-        sqlite.prepare('UPDATE deliveries SET member_id = ? WHERE member_id = ?').run(newId, member.id);
-        sqlite.prepare('UPDATE deliveries SET reviewer_id = ? WHERE reviewer_id = ?').run(newId, member.id);
-        sqlite.prepare('UPDATE openclaw_status SET member_id = ? WHERE member_id = ?').run(newId, member.id);
-        sqlite.prepare('UPDATE chat_sessions SET member_id = ? WHERE member_id = ?').run(newId, member.id);
-        sqlite.prepare('UPDATE openclaw_workspaces SET member_id = ? WHERE member_id = ?').run(newId, member.id);
-        // 最后更新 members.id
-        sqlite.prepare('UPDATE members SET id = ? WHERE id = ?').run(newId, member.id);
-      }
-    }
-    
-    // 2. 迁移 projects 表（被 tasks, documents 引用）
-    const projectsData = sqlite.prepare('SELECT id FROM projects').all() as any[];
-    for (const proj of projectsData) {
-      const newId = convertId(proj.id);
-      if (newId !== proj.id) {
-        // 先更新所有引用 projects.id 的外键
-        sqlite.prepare('UPDATE tasks SET project_id = ? WHERE project_id = ?').run(newId, proj.id);
-        sqlite.prepare('UPDATE documents SET project_id = ? WHERE project_id = ?').run(newId, proj.id);
-        // 最后更新 projects.id
-        sqlite.prepare('UPDATE projects SET id = ? WHERE id = ?').run(newId, proj.id);
-      }
-    }
-    
-    // 3. 迁移 tasks 表（被多个表引用）
-    const allTasks = sqlite.prepare('SELECT id, assignees, check_items, attachments, parent_task_id FROM tasks').all() as any[];
-    for (const task of allTasks) {
-      const newId = convertId(task.id);
-      if (newId !== task.id) {
-        // 先更新所有引用 tasks.id 的外键
-        sqlite.prepare('UPDATE task_logs SET task_id = ? WHERE task_id = ?').run(newId, task.id);
-        sqlite.prepare('UPDATE comments SET task_id = ? WHERE task_id = ?').run(newId, task.id);
-        sqlite.prepare('UPDATE deliveries SET task_id = ? WHERE task_id = ?').run(newId, task.id);
-        sqlite.prepare('UPDATE openclaw_status SET current_task_id = ? WHERE current_task_id = ?').run(newId, task.id);
-        sqlite.prepare('UPDATE openclaw_status SET next_task_id = ? WHERE next_task_id = ?').run(newId, task.id);
-        // 最后更新 tasks.id（不更新 project_id，因为 projects 已迁移）
-        sqlite.prepare('UPDATE tasks SET id = ?, assignees = ?, check_items = ?, attachments = ?, parent_task_id = ? WHERE id = ?')
-          .run(newId, convertJsonIds(task.assignees), convertJsonIds(task.check_items), convertJsonIds(task.attachments), convertId(task.parent_task_id), task.id);
-      }
-    }
-    
-    // 4. 迁移 documents 表（被 deliveries, openclaw_files 引用）
-    const docs = sqlite.prepare('SELECT id FROM documents').all() as any[];
-    for (const doc of docs) {
-      const newId = convertId(doc.id);
-      if (newId !== doc.id) {
-        // 先更新所有引用 documents.id 的外键
-        sqlite.prepare('UPDATE deliveries SET document_id = ? WHERE document_id = ?').run(newId, doc.id);
-        sqlite.prepare('UPDATE openclaw_files SET document_id = ? WHERE document_id = ?').run(newId, doc.id);
-        // 最后更新 documents.id（不更新 project_id，因为 projects 已迁移）
-        sqlite.prepare('UPDATE documents SET id = ? WHERE id = ?').run(newId, doc.id);
-      }
-    }
-    
-    // 5. 迁移其他表的主键
-    const tablesWithUuid = [
-      { table: 'task_logs', fkTables: [] },
-      { table: 'comments', fkTables: [] },
-      { table: 'scheduled_tasks', fkTables: ['scheduled_task_history'] },
-      { table: 'scheduled_task_history', fkTables: [] },
-      { table: 'deliveries', fkTables: [] },
-      { table: 'openclaw_status', fkTables: [] },
-      { table: 'chat_sessions', fkTables: ['chat_messages'] },
-      { table: 'chat_messages', fkTables: [] },
-    ];
-    
-    for (const { table, fkTables } of tablesWithUuid) {
-      const rows = sqlite.prepare(`SELECT id FROM ${table}`).all() as any[];
-      for (const row of rows) {
-        const newId = convertId(row.id);
-        if (newId !== row.id) {
-          for (const fkTable of fkTables) {
-            const fkCol = table === 'scheduled_tasks' ? 'scheduled_task_id' : 
-                          table === 'chat_sessions' ? 'session_id' : `${table.slice(0, -1)}_id`;
-            sqlite.prepare(`UPDATE ${fkTable} SET ${fkCol} = ? WHERE ${fkCol} = ?`).run(newId, row.id);
-          }
-          sqlite.prepare(`UPDATE ${table} SET id = ? WHERE id = ?`).run(newId, row.id);
-        }
-      }
-    }
-    
-    // 6. 更新 chat_sessions 中的 entity_id
-    const sessions = sqlite.prepare('SELECT id, entity_id FROM chat_sessions WHERE entity_id IS NOT NULL').all() as any[];
-    for (const session of sessions) {
-      const newEntityId = convertId(session.entity_id);
-      if (newEntityId !== session.entity_id) {
-        sqlite.prepare('UPDATE chat_sessions SET entity_id = ? WHERE id = ?').run(newEntityId, session.id);
-      }
-    }
-    
-    // 标记迁移完成
-    sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS migration_meta (key TEXT PRIMARY KEY, value TEXT)
-    `);
-    sqlite.prepare("INSERT OR REPLACE INTO migration_meta (key, value) VALUES ('uuid_to_base58', 'done')").run();
-    
-    sqlite.exec('COMMIT');
-    console.log(`[CoMind] Migration complete. Converted ${idMap.size} UUIDs to Base58.`);
-  } catch (err) {
-    sqlite.exec('ROLLBACK');
-    console.error('[CoMind] Migration failed, rolled back:', err);
-  }
-}
 
 // 创建 Drizzle 实例
 export const db = drizzle(sqlite, { schema });

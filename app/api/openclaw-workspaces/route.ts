@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       isDefault = false,
       syncEnabled = true,
       watchEnabled = true,
-      syncInterval = 30,
+      syncInterval = 120,
       excludePatterns = ['node_modules/**', '.git/**', 'temp/**'],
     } = body;
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, members, type NewMember } from '@/db';
+import { eq } from 'drizzle-orm';
 import { generateMemberId } from '@/lib/id';
 import { sanitizeMember } from '@/lib/sanitize';
 import { validateEnumWithDefault, validateEnum, VALID_MEMBER_TYPE, VALID_DEPLOY_MODE } from '@/lib/validators';
@@ -55,7 +56,7 @@ async function handlePost(request: NextRequest) {
       openclawApiToken: encryptedToken,
       openclawModel: sanitizeString(openclawModel, 50) || null,
       openclawEnableWebSearch: openclawEnableWebSearch ?? false,
-      openclawTemperature: typeof openclawTemperature === 'number' ? openclawTemperature : null,
+      openclawTemperature: typeof openclawTemperature === 'number' ? Math.min(2.0, Math.max(0, openclawTemperature)) : null,
       experienceTaskCount: 0,
       experienceTaskTypes: [],
       experienceTools: [],
@@ -71,7 +72,9 @@ async function handlePost(request: NextRequest) {
     // 问题 #10：POST 后通知前端刷新
     eventBus.emit({ type: 'member_update', resourceId: newMember.id });
     
-    return NextResponse.json(sanitizeMember(newMember), { status: 201 });
+    // 返回数据库中的完整数据（而非内存构造的对象）
+    const [created] = await db.select().from(members).where(eq(members.id, newMember.id));
+    return NextResponse.json(sanitizeMember(created || newMember), { status: 201 });
   } catch (error) {
     console.error('[POST /api/members]', error);
     return NextResponse.json({ error: 'Failed to create member' }, { status: 500 });

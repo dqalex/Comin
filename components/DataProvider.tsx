@@ -66,6 +66,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     schedule_update: () => fetchScheduledTasks(),
     document_update: () => fetchDocuments(),
     member_update: () => fetchMembers(),
+    project_update: () => fetchProjects(),
     chat_session_update: () => fetchChatSessions(),
     milestone_update: () => fetchMilestones(),
     // Gateway 服务端代理事件（REQ-003）
@@ -112,6 +113,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       schedule_update: () => fetchScheduledTasks(),
       document_update: () => fetchDocuments(),
       member_update: () => fetchMembers(),
+      project_update: () => fetchProjects(),
       chat_session_update: () => fetchChatSessions(),
       milestone_update: () => fetchMilestones(),
       // Gateway 服务端代理事件（REQ-003）

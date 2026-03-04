@@ -48,6 +48,9 @@ export async function GET(
     let content = '';
     if (workspace?.path) {
       const filePath = join(workspace.path, file.relativePath);
+      if (!filePath.startsWith(workspace.path)) {
+        return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+      }
       try {
         content = readFileSync(filePath, 'utf-8');
       } catch {

@@ -9,6 +9,7 @@ import type { SOPTemplate, SOPStage, SOPCategory, StageType, StageOutputType } f
 import clsx from 'clsx';
 import {
   X, Plus, Trash2, ChevronDown, ChevronUp, CheckCircle2, GripVertical,
+  FileText, Upload, Code,
 } from 'lucide-react';
 
 interface SOPTemplateEditorProps {
@@ -64,6 +65,100 @@ export default function SOPTemplateEditor({ template, onClose }: SOPTemplateEdit
     return [];
   });
   
+  // 编辑模式：表单 vs Markdown
+  type EditMode = 'form' | 'markdown';
+  const [editMode, setEditMode] = useState<EditMode>('form');
+  const [mdContent, setMdContent] = useState('');
+  const [showImportSkill, setShowImportSkill] = useState(false);
+  const [importSkillContent, setImportSkillContent] = useState('');
+
+  // 将 Skill YAML+Markdown 解析为 SOP 模板字段
+  const parseSkillToTemplate = useCallback((raw: string): boolean => {
+    try {
+      let frontmatter: Record<string, string> = {};
+      let body = raw;
+      // 解析 --- frontmatter ---
+      const fmMatch = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+      if (fmMatch) {
+        const fmLines = fmMatch[1].split('\n');
+        for (const line of fmLines) {
+          const m = line.match(/^(\w[\w-]*)\s*:\s*(.+)$/);
+          if (m) frontmatter[m[1].trim()] = m[2].trim();
+        }
+        body = fmMatch[2];
+      }
+      // 从 frontmatter 提取基本信息
+      if (frontmatter.name) setName(frontmatter.name);
+      if (frontmatter.description) setDescription(frontmatter.description);
+      // 解析 ## 标题 → 阶段
+      const sectionRegex = /^##\s+(.+)$/gm;
+      const sections: { label: string; content: string; startIdx: number }[] = [];
+      let match;
+      while ((match = sectionRegex.exec(body)) !== null) {
+        sections.push({ label: match[1].trim(), content: '', startIdx: match.index + match[0].length });
+      }
+      for (let i = 0; i < sections.length; i++) {
+        const end = i + 1 < sections.length ? body.lastIndexOf('\n##', sections[i + 1].startIdx) : body.length;
+        sections[i].content = body.slice(sections[i].startIdx, end).trim();
+      }
+      if (sections.length > 0) {
+        const parsedStages: SOPStage[] = sections.map((sec) => {
+          // 尝试从内容中提取 type 和 prompt
+          let type: StageType = 'ai_auto';
+          let prompt = sec.content;
+          const typeMatch = sec.content.match(/[-*]\s*type\s*[:：]\s*(\w+)/i);
+          if (typeMatch) {
+            const rawType = typeMatch[1].toLowerCase();
+            if (['input', 'ai_auto', 'ai_with_confirm', 'manual', 'render', 'export', 'review'].includes(rawType)) {
+              type = rawType as StageType;
+            }
+            prompt = sec.content.replace(typeMatch[0], '').trim();
+          }
+          const promptMatch = prompt.match(/[-*]\s*prompt\s*[:：]\s*([\s\S]+?)(?=\n[-*]|\n##|$)/i);
+          if (promptMatch) prompt = promptMatch[1].trim();
+          return {
+            id: generateId(),
+            label: sec.label,
+            description: '',
+            type,
+            promptTemplate: type.startsWith('ai') ? prompt : '',
+            outputType: 'markdown' as const,
+            outputLabel: '',
+          };
+        });
+        setStages(parsedStages);
+      }
+      // 第一段非标题文本作为 systemPrompt
+      const firstPara = body.match(/^([^#][\s\S]*?)(?=\n##|\n$)/);
+      if (firstPara && firstPara[1].trim()) {
+        setSystemPrompt(firstPara[1].trim());
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // 从表单字段生成 Markdown（用于切换到 MD 编辑模式时）
+  const generateMarkdown = useCallback((): string => {
+    const lines: string[] = [];
+    lines.push('---');
+    if (name) lines.push(`name: ${name}`);
+    if (description) lines.push(`description: ${description}`);
+    if (category !== 'custom') lines.push(`category: ${category}`);
+    lines.push('---');
+    lines.push('');
+    if (systemPrompt) { lines.push(systemPrompt); lines.push(''); }
+    for (const stage of stages) {
+      lines.push(`## ${stage.label || '未命名阶段'}`);
+      lines.push(`- type: ${stage.type}`);
+      if (stage.promptTemplate) lines.push(`- prompt: ${stage.promptTemplate}`);
+      if (stage.outputType && stage.outputType !== 'text') lines.push(`- outputType: ${stage.outputType}`);
+      lines.push('');
+    }
+    return lines.join('\n');
+  }, [name, description, category, systemPrompt, stages]);
+
   // 展开的阶段
   const [expandedStageId, setExpandedStageId] = useState<string | null>(null);
   
@@ -240,13 +335,122 @@ export default function SOPTemplateEditor({ template, onClose }: SOPTemplateEdit
           <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
             {isEditing ? t('sop.editTemplate') : t('sop.createTemplate')}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <X className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 编辑模式切换 */}
+            <div className="flex p-0.5 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+              <button
+                onClick={() => {
+                  if (editMode === 'markdown') {
+                    // 从 MD 模式切回表单模式时，解析 MD 内容
+                    if (mdContent.trim()) parseSkillToTemplate(mdContent);
+                  }
+                  setEditMode('form');
+                }}
+                className={clsx(
+                  'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                  editMode === 'form' ? 'bg-white dark:bg-slate-700 shadow-sm' : ''
+                )}
+                style={{ color: editMode === 'form' ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                {t('sopEditor.formEditMode')}
+              </button>
+              <button
+                onClick={() => {
+                  if (editMode === 'form') {
+                    // 从表单模式切到 MD 模式时，生成 MD
+                    setMdContent(generateMarkdown());
+                  }
+                  setEditMode('markdown');
+                }}
+                className={clsx(
+                  'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                  editMode === 'markdown' ? 'bg-white dark:bg-slate-700 shadow-sm' : ''
+                )}
+                style={{ color: editMode === 'markdown' ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
+              >
+                <Code className="w-3 h-3" />
+                {t('sopEditor.mdEditMode')}
+              </button>
+            </div>
+            {/* 导入 Skill 按钮 */}
+            <button
+              onClick={() => setShowImportSkill(!showImportSkill)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              <Upload className="w-3.5 h-3.5" />
+              {t('sopEditor.importSkill')}
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+              <X className="w-5 h-5" style={{ color: 'var(--text-tertiary)' }} />
+            </button>
+          </div>
         </div>
         
         {/* 内容 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Skill 导入面板 */}
+          {showImportSkill && (
+            <div className="card p-4 border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-secondary)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Upload className="w-4 h-4 text-blue-500" />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{t('sopEditor.importSkill')}</span>
+                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{t('sopEditor.importSkillHint')}</span>
+              </div>
+              <textarea
+                value={importSkillContent}
+                onChange={(e) => setImportSkillContent(e.target.value)}
+                placeholder={t('sopEditor.importSkillPlaceholder')}
+                rows={8}
+                className="w-full px-3 py-2 rounded-lg border text-sm resize-none font-mono mb-3"
+                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" size="sm" onClick={() => { setShowImportSkill(false); setImportSkillContent(''); }}>
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!importSkillContent.trim()}
+                  onClick={() => {
+                    const ok = parseSkillToTemplate(importSkillContent);
+                    if (ok) {
+                      setShowImportSkill(false);
+                      setImportSkillContent('');
+                    } else {
+                      alert(t('sopEditor.parseError'));
+                    }
+                  }}
+                >
+                  <FileText className="w-3.5 h-3.5 mr-1" />
+                  {t('sopEditor.parseSkill')}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Markdown 编辑模式 */}
+          {editMode === 'markdown' ? (
+            <div>
+              <textarea
+                value={mdContent}
+                onChange={(e) => setMdContent(e.target.value)}
+                placeholder={t('sopEditor.mdPlaceholder')}
+                className="w-full px-4 py-3 rounded-lg border text-sm resize-none font-mono leading-relaxed"
+                style={{
+                  backgroundColor: 'var(--bg-primary)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-primary)',
+                  minHeight: '400px',
+                }}
+              />
+              <p className="text-[10px] mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+                支持 Skill 标准语法：--- frontmatter ---（name/description/category）+ ## 阶段标题 + - type: ai_auto + - prompt: ...
+              </p>
+            </div>
+          ) : (
+          <>
           {/* 基本信息 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -641,6 +845,8 @@ export default function SOPTemplateEditor({ template, onClose }: SOPTemplateEdit
               </Button>
             </div>
           </div>
+          </>
+          )}
         </div>
         
         {/* 底部操作 */}
@@ -648,7 +854,13 @@ export default function SOPTemplateEditor({ template, onClose }: SOPTemplateEdit
           <Button variant="secondary" onClick={onClose}>
             {t('sop.cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={!isValid || saving}>
+          <Button onClick={() => {
+            // 如果在 MD 模式，先解析回表单字段
+            if (editMode === 'markdown' && mdContent.trim()) {
+              parseSkillToTemplate(mdContent);
+            }
+            handleSave();
+          }} disabled={!isValid || saving}>
             {saving ? t('common.loading') : t('sop.save')}
           </Button>
         </div>

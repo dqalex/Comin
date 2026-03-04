@@ -446,32 +446,43 @@ async function performSync(
     }
   }
 
-  // 清理已删除文件的数据库记录
+  // 清理已删除文件的数据库记录（批量化处理）
   const currentPaths = new Set(files.map(f => relative(workspace.path, f.path)));
-  for (const [existingPath, existingFile] of existingMap) {
-    if (!currentPaths.has(existingPath)) {
-      try {
-        // 删除子表记录（版本历史、冲突）
-        await db.delete(openclawConflicts).where(eq(openclawConflicts.fileId, existingFile.id));
-        await db.delete(openclawVersions).where(eq(openclawVersions.fileId, existingFile.id));
-        // 先删除关联的 deliveries（引用 document_id）
-        if (existingFile.documentId) {
-          await db.delete(deliveries).where(eq(deliveries.documentId, existingFile.documentId));
-          // 删除关联的 tasks（attachments 中包含 sync:documentId）
-          await db.run(sql`DELETE FROM tasks WHERE attachments LIKE ${'%sync:' + existingFile.documentId + '%'}`);
-        }
-        // 先删 openclawFiles（它引用 documents），再删 document
-        await db.delete(openclawFiles).where(eq(openclawFiles.id, existingFile.id));
-        if (existingFile.documentId) {
-          await db.delete(documents).where(eq(documents.id, existingFile.documentId));
-        }
-        results.deleted++;
-      } catch (err) {
-        results.errors.push({
-          file: existingPath,
-          error: `Delete cleanup failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        });
+  const deletedFiles = [...existingMap.entries()].filter(([path]) => !currentPaths.has(path));
+  
+  if (deletedFiles.length > 0) {
+    const deletedFileIds = deletedFiles.map(([, f]) => f.id);
+    const deletedDocIds = deletedFiles
+      .map(([, f]) => f.documentId)
+      .filter((id): id is string => !!id);
+    
+    try {
+      // 批量删除子表记录
+      for (const fileId of deletedFileIds) {
+        await db.delete(openclawConflicts).where(eq(openclawConflicts.fileId, fileId));
+        await db.delete(openclawVersions).where(eq(openclawVersions.fileId, fileId));
       }
+      
+      // 批量清理关联数据
+      for (const docId of deletedDocIds) {
+        await db.delete(deliveries).where(eq(deliveries.documentId, docId));
+        await db.run(sql`DELETE FROM tasks WHERE attachments LIKE ${'%sync:' + docId + '%'}`);
+      }
+      
+      // 批量删除 openclawFiles 和 documents
+      for (const fileId of deletedFileIds) {
+        await db.delete(openclawFiles).where(eq(openclawFiles.id, fileId));
+      }
+      for (const docId of deletedDocIds) {
+        await db.delete(documents).where(eq(documents.id, docId));
+      }
+      
+      results.deleted += deletedFiles.length;
+    } catch (err) {
+      results.errors.push({
+        file: 'batch-cleanup',
+        error: `Delete cleanup failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      });
     }
   }
 

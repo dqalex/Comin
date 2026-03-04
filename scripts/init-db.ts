@@ -9,10 +9,20 @@
  *   data/init/comind-init.db - 包含内置文档的初始化数据库
  */
 
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
 import Database from 'better-sqlite3';
+import { existsSync, mkdirSync, rmSync, readFileSync } from 'fs';
+import { join } from 'path';
+
+// 动态导入内置模板（需要先 build 或使用 tsx）
+let BUILTIN_SOP_TEMPLATES: any[] = [];
+let BUILTIN_RENDER_TEMPLATES: any[] = [];
+try {
+  const templates = require('../db/builtin-templates');
+  BUILTIN_SOP_TEMPLATES = templates.BUILTIN_SOP_TEMPLATES;
+  BUILTIN_RENDER_TEMPLATES = templates.BUILTIN_RENDER_TEMPLATES;
+} catch {
+  // tsx 模式下使用 import
+}
 
 // 内置文档定义
 const BUILTIN_DOCS = [
@@ -39,156 +49,112 @@ const BUILTIN_DOCS = [
   },
 ];
 
-// 数据库 Schema SQL
+// 数据库 Schema SQL（与 db/index.ts 保持一致的 v3 完整 Schema）
 const SCHEMA_SQL = `
--- 项目表
 CREATE TABLE IF NOT EXISTS projects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  source TEXT NOT NULL DEFAULT 'local',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT,
+  source TEXT NOT NULL DEFAULT 'local', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
-
--- 成员表
 CREATE TABLE IF NOT EXISTS members (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL DEFAULT 'human',
-  email TEXT,
-  avatar TEXT,
-  online INTEGER DEFAULT 0,
-  openclaw_name TEXT,
-  openclaw_deploy_mode TEXT,
-  openclaw_endpoint TEXT,
-  openclaw_connection_status TEXT,
-  openclaw_last_heartbeat INTEGER,
-  openclaw_gateway_url TEXT,
-  openclaw_agent_id TEXT,
-  openclaw_api_token TEXT,
-  openclaw_model TEXT,
-  openclaw_enable_web_search INTEGER DEFAULT 0,
-  openclaw_temperature REAL,
-  config_source TEXT DEFAULT 'manual',
-  execution_mode TEXT DEFAULT 'chat_only',
-  experience_task_count INTEGER DEFAULT 0,
-  experience_task_types TEXT,
-  experience_tools TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'human',
+  email TEXT, avatar TEXT, online INTEGER DEFAULT 0,
+  openclaw_name TEXT, openclaw_deploy_mode TEXT, openclaw_endpoint TEXT,
+  openclaw_connection_status TEXT, openclaw_last_heartbeat INTEGER,
+  openclaw_gateway_url TEXT, openclaw_agent_id TEXT, openclaw_api_token TEXT,
+  openclaw_model TEXT, openclaw_enable_web_search INTEGER DEFAULT 0, openclaw_temperature REAL,
+  config_source TEXT DEFAULT 'manual', execution_mode TEXT DEFAULT 'chat_only',
+  experience_task_count INTEGER DEFAULT 0, experience_task_types TEXT, experience_tools TEXT,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
-
--- 任务表
 CREATE TABLE IF NOT EXISTS tasks (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  project_id TEXT REFERENCES projects(id),
-  source TEXT NOT NULL DEFAULT 'local',
-  assignees TEXT NOT NULL DEFAULT '[]',
-  creator_id TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'todo',
-  progress INTEGER DEFAULT 0,
-  priority TEXT NOT NULL DEFAULT 'medium',
-  deadline INTEGER,
-  check_items TEXT DEFAULT '[]',
-  attachments TEXT DEFAULT '[]',
-  parent_task_id TEXT,
-  cross_projects TEXT DEFAULT '[]',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, description TEXT,
+  project_id TEXT REFERENCES projects(id), milestone_id TEXT, source TEXT NOT NULL DEFAULT 'local',
+  assignees TEXT NOT NULL DEFAULT '[]', creator_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'todo', progress INTEGER DEFAULT 0,
+  priority TEXT NOT NULL DEFAULT 'medium', deadline INTEGER,
+  check_items TEXT DEFAULT '[]', attachments TEXT DEFAULT '[]',
+  parent_task_id TEXT, cross_projects TEXT DEFAULT '[]',
+  sop_template_id TEXT, current_stage_id TEXT, stage_history TEXT DEFAULT '[]', sop_inputs TEXT,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
-
--- 任务日志
+CREATE TABLE IF NOT EXISTS milestones (
+  id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, description TEXT,
+  project_id TEXT NOT NULL REFERENCES projects(id), status TEXT NOT NULL DEFAULT 'open',
+  due_date INTEGER, sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS task_logs (
-  id TEXT PRIMARY KEY,
-  task_id TEXT NOT NULL REFERENCES tasks(id),
-  action TEXT NOT NULL,
-  content TEXT,
-  member_id TEXT,
+  id TEXT PRIMARY KEY NOT NULL, task_id TEXT NOT NULL REFERENCES tasks(id),
+  action TEXT NOT NULL, message TEXT NOT NULL, timestamp INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY NOT NULL, task_id TEXT NOT NULL REFERENCES tasks(id),
+  author_id TEXT NOT NULL, content TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, content TEXT,
+  project_id TEXT REFERENCES projects(id), project_tags TEXT DEFAULT '[]',
+  source TEXT NOT NULL DEFAULT 'local', external_platform TEXT, external_id TEXT,
+  external_url TEXT, mcp_server TEXT, last_sync INTEGER, sync_mode TEXT,
+  links TEXT DEFAULT '[]', backlinks TEXT DEFAULT '[]', type TEXT NOT NULL DEFAULT 'note',
+  render_mode TEXT DEFAULT 'markdown', render_template_id TEXT, html_content TEXT, slot_data TEXT,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS deliveries (
+  id TEXT PRIMARY KEY NOT NULL, member_id TEXT NOT NULL REFERENCES members(id),
+  task_id TEXT REFERENCES tasks(id), document_id TEXT REFERENCES documents(id),
+  title TEXT NOT NULL, description TEXT, platform TEXT NOT NULL,
+  external_url TEXT, external_id TEXT, status TEXT NOT NULL DEFAULT 'pending',
+  reviewer_id TEXT REFERENCES members(id), reviewed_at INTEGER, review_comment TEXT,
+  version INTEGER DEFAULT 1, previous_delivery_id TEXT, source TEXT NOT NULL DEFAULT 'local',
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id TEXT PRIMARY KEY NOT NULL, member_id TEXT NOT NULL, member_name TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '新对话', conversation_id TEXT,
+  entity_type TEXT, entity_id TEXT, entity_title TEXT,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id TEXT PRIMARY KEY NOT NULL, session_id TEXT NOT NULL REFERENCES chat_sessions(id),
+  role TEXT NOT NULL, content TEXT NOT NULL, status TEXT DEFAULT 'sent',
   created_at INTEGER NOT NULL
 );
-
--- 任务评论
-CREATE TABLE IF NOT EXISTS task_comments (
-  id TEXT PRIMARY KEY,
-  task_id TEXT NOT NULL REFERENCES tasks(id),
-  member_id TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+CREATE TABLE IF NOT EXISTS sop_templates (
+  id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'custom', icon TEXT DEFAULT 'clipboard-list',
+  status TEXT NOT NULL DEFAULT 'active', stages TEXT NOT NULL DEFAULT '[]',
+  required_tools TEXT DEFAULT '[]', system_prompt TEXT DEFAULT '',
+  knowledge_config TEXT, output_config TEXT, quality_checklist TEXT DEFAULT '[]',
+  is_builtin INTEGER NOT NULL DEFAULT 0, project_id TEXT REFERENCES projects(id),
+  created_by TEXT NOT NULL DEFAULT 'system', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS render_templates (
+  id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'custom', status TEXT NOT NULL DEFAULT 'active',
+  html_template TEXT NOT NULL DEFAULT '', md_template TEXT NOT NULL DEFAULT '',
+  css_template TEXT, slots TEXT NOT NULL DEFAULT '{}', sections TEXT NOT NULL DEFAULT '[]',
+  export_config TEXT NOT NULL DEFAULT '{"formats":["jpg","html"]}', thumbnail TEXT,
+  is_builtin INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT 'system',
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 
--- 文档表
-CREATE TABLE IF NOT EXISTS documents (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  content TEXT,
-  type TEXT NOT NULL DEFAULT 'note',
-  source TEXT NOT NULL DEFAULT 'local',
-  project_id TEXT REFERENCES projects(id),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- 项目成员关联
-CREATE TABLE IF NOT EXISTS project_members (
-  project_id TEXT NOT NULL REFERENCES projects(id),
-  member_id TEXT NOT NULL REFERENCES members(id),
-  role TEXT NOT NULL DEFAULT 'member',
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY (project_id, member_id)
-);
-
--- 定时任务表
-CREATE TABLE IF NOT EXISTS schedules (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  cron TEXT NOT NULL,
-  member_id TEXT NOT NULL REFERENCES members(id),
-  enabled INTEGER DEFAULT 1,
-  last_run INTEGER,
-  next_run INTEGER,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- 状态队列表
-CREATE TABLE IF NOT EXISTS status_queues (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  member_id TEXT NOT NULL REFERENCES members(id),
-  items TEXT NOT NULL DEFAULT '[]',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- 交付物表
-CREATE TABLE IF NOT EXISTS deliveries (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  platform TEXT NOT NULL,
-  document_id TEXT,
-  task_id TEXT REFERENCES tasks(id),
-  status TEXT NOT NULL DEFAULT 'pending',
-  submitted_by TEXT NOT NULL,
-  reviewed_by TEXT,
-  reviewed_at INTEGER,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- 创建索引
-CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+-- 索引
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_creator ON tasks(creator_id);
-CREATE INDEX IF NOT EXISTS idx_task_logs_task ON task_logs(task_id);
-CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task_comments(task_id);
-CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
-CREATE INDEX IF NOT EXISTS idx_schedules_member ON schedules(member_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_creator_id ON tasks(creator_id);
+CREATE INDEX IF NOT EXISTS idx_task_logs_task_id ON task_logs(task_id);
+CREATE INDEX IF NOT EXISTS idx_comments_task_id ON comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type);
+CREATE INDEX IF NOT EXISTS idx_deliveries_member_id ON deliveries(member_id);
+CREATE INDEX IF NOT EXISTS idx_deliveries_task_id ON deliveries(task_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_member_id ON chat_sessions(member_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_sop_templates_category ON sop_templates(category);
+CREATE INDEX IF NOT EXISTS idx_sop_templates_status ON sop_templates(status);
+CREATE INDEX IF NOT EXISTS idx_render_templates_category ON render_templates(category);
+CREATE INDEX IF NOT EXISTS idx_render_templates_status ON render_templates(status);
 `;
 
 function readDocContent(filename: string): string {
@@ -248,6 +214,28 @@ function main() {
     const content = readDocContent(docFiles[doc.title] || '');
     insertDoc.run(doc.id, doc.title, content, doc.type, doc.source, now, now);
     console.log(`已插入文档: ${doc.title} (${doc.id})`);
+  }
+
+  // 插入内置 SOP 模板
+  if (BUILTIN_SOP_TEMPLATES.length > 0) {
+    const insertSop = db.prepare(
+      `INSERT OR IGNORE INTO sop_templates (id, name, description, category, icon, status, stages, system_prompt, quality_checklist, is_builtin, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const t of BUILTIN_SOP_TEMPLATES) {
+      insertSop.run(t.id, t.name, t.description, t.category, t.icon, 'active', JSON.stringify(t.stages), t.systemPrompt, JSON.stringify(t.qualityChecklist), 1, 'system', now, now);
+    }
+    console.log(`已插入 ${BUILTIN_SOP_TEMPLATES.length} 个内置 SOP 模板`);
+  }
+
+  // 插入内置渲染模板
+  if (BUILTIN_RENDER_TEMPLATES.length > 0) {
+    const insertRt = db.prepare(
+      `INSERT OR IGNORE INTO render_templates (id, name, description, category, status, html_template, css_template, md_template, slots, sections, export_config, is_builtin, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const t of BUILTIN_RENDER_TEMPLATES) {
+      insertRt.run(t.id, t.name, t.description, t.category, 'active', t.htmlTemplate, t.cssTemplate, t.mdTemplate, JSON.stringify(t.slots), JSON.stringify(t.sections), JSON.stringify(t.exportConfig), 1, 'system', now, now);
+    }
+    console.log(`已插入 ${BUILTIN_RENDER_TEMPLATES.length} 个内置渲染模板`);
   }
 
   // 关闭数据库

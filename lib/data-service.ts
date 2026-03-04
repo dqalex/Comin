@@ -172,7 +172,7 @@ export const commentsApi = {
   async getByTask(taskId: string): Promise<ApiResponse<Comment[]>> {
     return apiRequest<Comment[]>(`/api/comments?taskId=${encodeURIComponent(taskId)}`);
   },
-  async create(comment: { taskId: string; authorId: string; content: string }): Promise<ApiResponse<Comment>> {
+  async create(comment: { taskId: string; memberId: string; content: string }): Promise<ApiResponse<Comment>> {
     return apiRequest<Comment>('/api/comments', { method: 'POST', body: JSON.stringify(comment) });
   },
   async delete(id: string): Promise<ApiResponse<{ success: boolean }>> {

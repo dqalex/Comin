@@ -178,34 +178,6 @@ export default function HtmlPreview({
     <div className={clsx('flex flex-col h-full', className)}>
       {/* 工具栏 */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
-        {/* 设备切换 */}
-        <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] rounded-md p-0.5">
-          <button
-            onClick={() => setDeviceMode('pc')}
-            className={clsx(
-              'p-1 rounded transition-colors',
-              deviceMode === 'pc'
-                ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            )}
-            title="PC (1920×1080)"
-          >
-            <Monitor size={14} />
-          </button>
-          <button
-            onClick={() => setDeviceMode('mobile')}
-            className={clsx(
-              'p-1 rounded transition-colors',
-              deviceMode === 'mobile'
-                ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            )}
-            title="Mobile (1024×1366)"
-          >
-            <Smartphone size={14} />
-          </button>
-        </div>
-
         {/* 编辑/预览模式切换 */}
         <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] rounded-md p-0.5">
           <button
@@ -233,6 +205,36 @@ export default function HtmlPreview({
             {t('studio.edit')}
           </button>
         </div>
+
+        {/* 设备切换：仅编辑模式下显示 */}
+        {editMode && (
+          <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] rounded-md p-0.5">
+            <button
+              onClick={() => setDeviceMode('pc')}
+              className={clsx(
+                'p-1 rounded transition-colors',
+                deviceMode === 'pc'
+                  ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              )}
+              title="PC (1920×1080)"
+            >
+              <Monitor size={14} />
+            </button>
+            <button
+              onClick={() => setDeviceMode('mobile')}
+              className={clsx(
+                'p-1 rounded transition-colors',
+                deviceMode === 'mobile'
+                  ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              )}
+              title="Mobile (1024×1366)"
+            >
+              <Smartphone size={14} />
+            </button>
+          </div>
+        )}
 
         <div className="flex-1" />
 

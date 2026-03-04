@@ -79,13 +79,14 @@ export async function handleAddTaskComment(params: Record<string, unknown>) {
   }
   
   // 优先使用调用方提供的 member_id，否则回退到 'ai-agent'
-  const authorId = member_id || 'ai-agent';
+  const commentMemberId = member_id || 'ai-agent';
   const comment = {
     id: generateCommentId(),
     taskId: task_id,
-    authorId,
+    memberId: commentMemberId,
     content,
     createdAt: new Date(),
+    updatedAt: new Date(),
   };
   await db.insert(comments).values(comment);
   

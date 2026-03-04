@@ -9,7 +9,7 @@ interface CommentState {
   setComments: (comments: Comment[]) => void;
   getByTask: (taskId: string) => Comment[];
   fetchCommentsByTask: (taskId: string) => Promise<void>;
-  createComment: (data: { taskId: string; authorId: string; content: string }) => Promise<Comment | null>;
+  createComment: (data: { taskId: string; memberId: string; content: string }) => Promise<Comment | null>;
   deleteCommentAsync: (id: string) => Promise<boolean>;
 }
 

@@ -153,7 +153,7 @@ async function buildTaskContext(taskId: string): Promise<string> {
   // 获取评论
   const taskComments = await db.select().from(comments).where(eq(comments.taskId, task.id));
   const commentsText = taskComments.map(c => {
-    const author = allMembers.find(m => m.id === c.authorId)?.name || '未知';
+    const author = allMembers.find(m => m.id === c.memberId)?.name || '未知';
     return `- **${author}**: ${c.content}`;
   }).join('\n');
 

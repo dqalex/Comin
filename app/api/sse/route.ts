@@ -16,7 +16,15 @@ export async function GET() {
 
     const stream = new ReadableStream({
       start(controller) {
-        registeredClientId = eventBus.addClient(controller);
+        try {
+          registeredClientId = eventBus.addClient(controller);
+        } catch (err) {
+          // 连接数超限时关闭流
+          const errMsg = err instanceof Error ? err.message : 'SSE connection rejected';
+          controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: errMsg })}\n\n`));
+          controller.close();
+          return;
+        }
 
         const welcome = `event: connected\ndata: ${JSON.stringify({ clientId: registeredClientId, timestamp: Date.now() })}\n\n`;
         controller.enqueue(encoder.encode(welcome));

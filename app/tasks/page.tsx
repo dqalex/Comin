@@ -788,10 +788,13 @@ export default function TasksPage() {
                 }
               }}
               onBlur={() => {
-                if (!quickTitle.trim()) {
-                  setShowQuickInput(false);
-                  setQuickTitle('');
-                }
+                // 延迟关闭，让旁边按钮的 click 事件有机会先触发
+                setTimeout(() => {
+                  if (!quickTitle.trim()) {
+                    setShowQuickInput(false);
+                    setQuickTitle('');
+                  }
+                }, 150);
               }}
               className="flex-1"
               placeholder={t('tasks.quickCreatePlaceholder')}

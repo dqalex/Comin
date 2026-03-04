@@ -36,6 +36,9 @@ export async function POST(
 
     // 读取文件内容
     const filePath = join(workspace.path, file.relativePath);
+    if (!filePath.startsWith(workspace.path)) {
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+    }
     let content = '';
     try {
       content = readFileSync(filePath, 'utf-8');

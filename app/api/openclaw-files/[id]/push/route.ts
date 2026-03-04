@@ -44,6 +44,9 @@ export async function POST(
       if (workspace?.path) {
         try {
           const filePath = join(workspace.path, file.relativePath);
+          if (!filePath.startsWith(workspace.path)) {
+            return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+          }
           serverContent = readFileSync(filePath, 'utf-8');
         } catch {
           // 文件可能不存在
@@ -70,16 +73,25 @@ export async function POST(
       return NextResponse.json({ error: 'Workspace path not found' }, { status: 400 });
     }
 
-    // 写入文件
+    // 构造安全的文件路径，防止路径遍历
     const filePath = join(workspace.path, file.relativePath);
-    writeFileSync(filePath, content, 'utf-8');
+    if (!filePath.startsWith(workspace.path)) {
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+    }
+
+    // 先读取旧内容用于版本保存
+    let oldContent = '';
+    try {
+      oldContent = readFileSync(filePath, 'utf-8');
+    } catch {
+      // 文件可能不存在（首次推送）
+    }
 
     // 计算新哈希
     const newHash = createHash('sha256').update(content).digest('hex').slice(0, 16);
     const newVersion = (file.version || 1) + 1;
 
-    // 保存旧版本
-    const oldContent = readFileSync(filePath, 'utf-8');
+    // 保存旧版本（在写入新内容之前）
     await db.insert(openclawVersions).values({
       id: generateId(),
       fileId: file.id,
@@ -90,6 +102,9 @@ export async function POST(
       changedBy: 'comind',
       createdAt: new Date(),
     });
+
+    // 写入新内容
+    writeFileSync(filePath, content, 'utf-8');
 
     // 更新文件记录
     const [updated] = await db.update(openclawFiles)

@@ -61,8 +61,8 @@ export async function PUT(
     await db.update(projects).set(updateData).where(eq(projects.id, resolvedId));
     
     const [updated] = await db.select().from(projects).where(eq(projects.id, resolvedId));
-    // 问题 #13：项目更新后通知前端刷新关联任务列表
-    eventBus.emit({ type: 'task_update', resourceId: resolvedId });
+    // 项目更新后通知前端刷新
+    eventBus.emit({ type: 'project_update', resourceId: resolvedId });
     return NextResponse.json(updated);
   } catch (error) {
     return NextResponse.json({ error: 'Failed to update project' }, { status: 500 });
@@ -159,7 +159,7 @@ export async function DELETE(
     });
 
     // 发送 SSE 事件通知前端刷新
-    eventBus.emit({ type: 'task_update', resourceId: resolvedId });
+    eventBus.emit({ type: 'project_update', resourceId: resolvedId });
 
     return NextResponse.json({ success: true });
   } catch (error) {

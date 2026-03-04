@@ -154,6 +154,33 @@ export default function TaskDrawer({ task, onClose, onDelete }: Props) {
     createLog({ taskId: task.id, action: '里程碑变更', message: `${oldMs?.title || '未分配'} → ${newMs?.title || '未分配'}` });
   };
 
+  // SOP 模板关联/取消关联
+  const handleSopTemplateChange = async (templateId: string) => {
+    const oldTpl = task.sopTemplateId ? sopTemplates.find(t => t.id === task.sopTemplateId) : null;
+    if (templateId) {
+      // 关联 SOP 模板：设置第一阶段为当前阶段，清空历史
+      const tpl = sopTemplates.find(t => t.id === templateId);
+      const firstStageId = tpl?.stages?.[0]?.id || null;
+      await updateTaskAsync(task.id, {
+        sopTemplateId: templateId,
+        currentStageId: firstStageId,
+        stageHistory: [],
+        sopInputs: null,
+      });
+      createLog({ taskId: task.id, action: 'SOP 关联', message: `${oldTpl?.name || '无'} → ${tpl?.name || templateId}` });
+    } else {
+      // 取消关联：清空所有 SOP 字段
+      await updateTaskAsync(task.id, {
+        sopTemplateId: null,
+        currentStageId: null,
+        stageHistory: [],
+        sopInputs: null,
+      });
+      createLog({ taskId: task.id, action: 'SOP 取消关联', message: `${oldTpl?.name || '未知'} → 无` });
+    }
+    await fetchTasks();
+  };
+
   const handleToggleCheckItem = async (index: number) => {
     const updated = [...checkItems];
     updated[index] = { ...updated[index], completed: !updated[index].completed };
@@ -499,6 +526,18 @@ export default function TaskDrawer({ task, onClose, onDelete }: Props) {
               {projectMilestones.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
             </Select>
           )}
+
+          {/* SOP 模板关联 */}
+          <Select
+            value={task.sopTemplateId || ''}
+            onChange={e => handleSopTemplateChange(e.target.value)}
+            className="text-xs py-1 w-auto"
+          >
+            <option value="">无 SOP</option>
+            {sopTemplates.filter(tpl => tpl.status === 'active').map(tpl => (
+              <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+            ))}
+          </Select>
         </div>
 
         {/* Tab 切换 */}
@@ -673,7 +712,7 @@ export default function TaskDrawer({ task, onClose, onDelete }: Props) {
                 <div className="text-center py-8 text-xs" style={{ color: 'var(--text-tertiary)' }}>暂无评论</div>
               )}
               {taskComments.map(comment => {
-                const member = members.find(m => m.id === comment.authorId);
+                const member = members.find(m => m.id === comment.memberId);
                 return (
                   <div key={comment.id} className="flex gap-2.5">
                     <div className={clsx(

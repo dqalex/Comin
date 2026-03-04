@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, X, Image, FileCode, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
@@ -59,8 +59,6 @@ export default function ExportModal({
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState('');
 
-  const exportFrameRef = useRef<HTMLIFrameElement>(null);
-
   const availableFormats = exportConfig?.formats || ['jpg', 'png', 'html'];
 
   const handleExport = useCallback(async () => {
@@ -85,78 +83,83 @@ export default function ExportModal({
       // 动态导入 html-to-image（仅在需要时加载）
       const htmlToImage = await import('html-to-image');
 
-      // 创建离屏容器
-      const container = document.createElement('div');
-      container.style.position = 'fixed';
-      container.style.left = '-99999px';
-      container.style.top = '0';
-      container.style.width = `${width}px`;
-      container.style.overflow = 'hidden';
-      document.body.appendChild(container);
+      // 清理编辑属性
+      const cleanHtml = cleanEditorAttributes(htmlContent);
+
+      // 从完整 HTML 文档中提取 <style> 和 <body> 内容
+      const parser = new DOMParser();
+      const parsedDoc = parser.parseFromString(cleanHtml, 'text/html');
+      const styles = Array.from(parsedDoc.querySelectorAll('style')).map(s => s.outerHTML).join('\n');
+      const bodyContent = parsedDoc.body.innerHTML;
+
+      // 提取 body 的背景样式（优先用模板自身的背景）
+      const bodyBg = parsedDoc.body.style.background || parsedDoc.body.style.backgroundColor || '';
+
+      // 创建截图用的 div
+      // 重要：使用 opacity:0 + pointer-events:none 隐藏，而非 left:-99999px
+      // html-to-image 对视口外的元素截图会产生纯黑图片
+      const captureDiv = document.createElement('div');
+      captureDiv.style.position = 'fixed';
+      captureDiv.style.top = '0';
+      captureDiv.style.left = '0';
+      captureDiv.style.width = `${width}px`;
+      captureDiv.style.opacity = '0';
+      captureDiv.style.pointerEvents = 'none';
+      captureDiv.style.zIndex = '-9999';
+      captureDiv.style.overflow = 'hidden';
+      // 不强制白色背景 — 让模板自身的 CSS 决定背景色
+      if (bodyBg) {
+        captureDiv.style.background = bodyBg;
+      }
+      captureDiv.innerHTML = `${styles}<div>${bodyContent}</div>`;
+      document.body.appendChild(captureDiv);
 
       try {
-        // 清理编辑属性后注入内容
-        const cleanHtml = cleanEditorAttributes(htmlContent);
-
-        // 创建 iframe 用于渲染
-        const frame = document.createElement('iframe');
-        frame.style.width = `${width}px`;
-        frame.style.height = '0';
-        frame.style.border = 'none';
-        frame.style.overflow = 'hidden';
-        container.appendChild(frame);
-
-        // 写入内容
-        const frameDoc = frame.contentDocument || frame.contentWindow?.document;
-        if (!frameDoc) throw new Error('无法访问导出 iframe');
-
-        frameDoc.open();
-        frameDoc.write(cleanHtml);
-        frameDoc.close();
-
-        // 等待字体和图片加载（替代 GrowthPilot 的硬等待 2500ms）
+        // 等待字体和图片加载
         setProgress(t('studio.exportWaitingResources'));
-        await waitForResources(frameDoc);
+        await waitForResources(document);
 
-        // 计算高度（GrowthPilot 经验：取多个值的最大值，兜底 800px）
-        const body = frameDoc.body;
-        const html = frameDoc.documentElement;
-        const height = Math.max(
-          body.scrollHeight || 0,
-          body.offsetHeight || 0,
-          body.clientHeight || 0,
-          html.scrollHeight || 0,
-          html.offsetHeight || 0,
-          html.clientHeight || 0,
-          800 // 兜底最小高度
-        );
-
-        frame.style.height = `${height}px`;
+        // 额外等待截图 div 中的图片
+        const imgs = captureDiv.querySelectorAll('img');
+        if (imgs.length > 0) {
+          await Promise.race([
+            Promise.all(Array.from(imgs).map(img =>
+              img.complete ? Promise.resolve() : new Promise<void>(r => {
+                img.onload = () => r();
+                img.onerror = () => r();
+              })
+            )),
+            new Promise(r => setTimeout(r, 5000)),
+          ]);
+        }
 
         // 等待重排
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const captureHeight = Math.max(captureDiv.scrollHeight || 0, captureDiv.offsetHeight || 0, 800);
 
         setProgress(t('studio.exportGeneratingImage'));
 
-        // 使用 html-to-image 导出
+        // 截图前临时设为可见（html-to-image 需要节点可见来正确渲染）
+        captureDiv.style.opacity = '1';
+
         const exportFn = format === 'png' ? htmlToImage.toPng : htmlToImage.toJpeg;
         const options = {
           width: width * scale,
-          height: height * scale,
+          height: captureHeight * scale,
           style: {
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
             width: `${width}px`,
-            height: `${height}px`,
+            height: `${captureHeight}px`,
           },
           quality: format === 'jpg' ? 0.95 : undefined,
-          cacheBust: true, // html-to-image 跨域图片支持
+          cacheBust: true,
         };
 
-        const dataUrl = await exportFn(frameDoc.body, options);
+        const dataUrl = await exportFn(captureDiv, options);
 
         // 下载
-        const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
         const ext = format === 'png' ? 'png' : 'jpg';
         const blob = dataURLToBlob(dataUrl);
         downloadBlob(blob, `${fileName}.${ext}`);
@@ -164,8 +167,7 @@ export default function ExportModal({
         setProgress('');
         onClose();
       } finally {
-        // 清理离屏容器
-        document.body.removeChild(container);
+        document.body.removeChild(captureDiv);
       }
     } catch (err) {
       console.error('[ExportModal] 导出失败:', err);
@@ -351,5 +353,6 @@ function downloadBlob(blob: Blob, filename: string): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // 延迟释放，确保浏览器有时间启动下载
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
