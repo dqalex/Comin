@@ -1,0 +1,45 @@
+{
+  "cookies": [
+    {
+      "name": "cms_session",
+      "value": "cms_eyJ1c2VySWQiOiJlSlVOb0JWMVBObyIsImV4cCI6MTc3MzM3NjQ4MzEzMSwibm9uY2UiOiI5ZWRmYjc0MWM1MWMyMmU3In0.8972956465dc4d13",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1773376483,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "teamclaw-ui",
+          "value": "{\"state\":{\"sidebarOpen\":true,\"theme\":\"light\",\"expandedProjects\":[]},\"version\":0}"
+        },
+        {
+          "name": "teamclaw-chat",
+          "value": "{\"state\":{\"activeGwSessionKey\":null},\"version\":0}"
+        },
+        {
+          "name": "teamclaw-project-selection",
+          "value": "{\"state\":{\"currentProjectId\":null},\"version\":0}"
+        },
+        {
+          "name": "auth-storage",
+          "value": "{\"state\":{\"isAuthenticated\":true},\"version\":0}"
+        },
+        {
+          "name": "teamclaw-language",
+          "value": "en"
+        },
+        {
+          "name": "teamclaw-member-selection",
+          "value": "{\"state\":{\"currentMemberId\":null},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+==========================================
+CoMind 部署脚本
+==========================================
+服务器: root@43.167.204.230
+远程路径: /root/comind
+跳过构建: true
+
+[1/6] 跳过本地构建
+[2/6] 同步文件到服务器...
+Transfer starting: 1726 files
+./
+package-lock.json
+
+sent 111602 bytes  received 3222 bytes  177443 bytes/sec
+total size is 7991652  speedup is 69.60
+✓ 同步完成
+[3/6] 服务器端构建...
+npm warn config production Use `--omit=dev` instead.

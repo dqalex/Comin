@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database (runtime)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+data/*.db
+!data/init/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+dist/
+build/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs (development only)
+logs/
+
+# CodeBuddy IDE config (development only)
+.codebuddy/
+
+# Misc
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Test reports (auto-generated)
+tests/reports/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Auto-generated architecture docs
+generated/

@@ -1,0 +1,20 @@
+'use client';
+
+import { ChatFab, ChatDrawer } from '@/components/chat';
+import { useAuthStore } from '@/store';
+
+export default function ChatOverlay() {
+  const user = useAuthStore((s) => s.user);
+  
+  // 未登录时不显示聊天浮层
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <>
+      <ChatFab />
+      <ChatDrawer />
+    </>
+  );
+}

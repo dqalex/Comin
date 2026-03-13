@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>CoMind v2 开发者架构总览</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 24px 32px; line-height: 1.6; }
+  h1 { color: #58a6ff; border-bottom: 2px solid #30363d; padding-bottom: 14px; margin-bottom: 8px; font-size: 28px; }
+  h1 small { font-size: 14px; color: #8b949e; font-weight: normal; margin-left: 12px; }
+  h2 { color: #79c0ff; margin-top: 48px; margin-bottom: 16px; font-size: 22px; border-left: 4px solid #58a6ff; padding-left: 12px; }
+  h3 { color: #d2a8ff; margin-top: 28px; margin-bottom: 12px; font-size: 17px; }
+  .subtitle { color: #8b949e; margin-bottom: 32px; font-size: 15px; }
+  .mermaid { background: #161b22; border-radius: 12px; padding: 24px; margin: 16px 0 24px; overflow-x: auto; }
+  .note { background: #1c2333; border-left: 4px solid #58a6ff; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14px; line-height: 1.7; }
+  .note strong { color: #58a6ff; }
+  .warn { border-left-color: #d29922; }
+  .warn strong { color: #d29922; }
+  .success { border-left-color: #3fb950; }
+  .success strong { color: #3fb950; }
+  .purple { border-left-color: #a78bfa; }
+  .purple strong { color: #a78bfa; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 20px; font-size: 14px; }
+  th, td { border: 1px solid #30363d; padding: 8px 12px; text-align: left; }
+  th { background: #1c2333; color: #79c0ff; font-weight: 600; white-space: nowrap; }
+  td { color: #c9d1d9; }
+  tr:hover td { background: #161b22; }
+  code { background: #1c2333; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #f0883e; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .badge-blue { background: #1f6feb33; color: #58a6ff; }
+  .badge-green { background: #23863633; color: #3fb950; }
+  .badge-purple { background: #8b5cf633; color: #a78bfa; }
+  .badge-orange { background: #d2992233; color: #e3b341; }
+  .badge-red { background: #da363333; color: #f85149; }
+  .toc { background: #161b22; border-radius: 12px; padding: 20px 28px; margin: 24px 0 40px; }
+  .toc h3 { color: #58a6ff; margin: 0 0 12px; font-size: 16px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .toc a { color: #79c0ff; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 16px 0; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; }
+  .card h4 { color: #58a6ff; margin-bottom: 8px; font-size: 15px; }
+  .card p { color: #8b949e; font-size: 13px; margin: 0; }
+  .card .icon { font-size: 24px; margin-bottom: 8px; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+  .stat { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px 24px; text-align: center; min-width: 120px; }
+  .stat .num { font-size: 32px; font-weight: 700; color: #58a6ff; }
+  .stat .label { font-size: 12px; color: #8b949e; margin-top: 4px; }
+  hr { border: none; border-top: 1px solid #21262d; margin: 40px 0; }
+</style>
+</head>
+<body>
+
+<h1>🧠 CoMind v2 开发者架构总览 <small>v2.2.3</small></h1>
+<p class="subtitle">开发者视角 — 系统架构、数据流、API、组件、数据库全景 | 基于 Next.js 14 + OpenClaw Gateway + SQLite</p>
+
+<!-- 统计概览 -->
+<div class="stats">
+  <div class="stat"><div class="num">14</div><div class="label">页面路由</div></div>
+  <div class="stat"><div class="num">50</div><div class="label">API 端点</div></div>
+  <div class="stat"><div class="num">24</div><div class="label">MCP 工具</div></div>
+  <div class="stat"><div class="num">17</div><div class="label">数据库表</div></div>
+  <div class="stat"><div class="num">13</div><div class="label">Zustand Store</div></div>
+  <div class="stat"><div class="num">14</div><div class="label">SSE 事件</div></div>
+  <div class="stat"><div class="num">38</div><div class="label">Gateway 方法</div></div>
+  <div class="stat"><div class="num">35</div><div class="label">UI 组件</div></div>
+</div>
+
+<!-- 目录 -->
+<div class="toc">
+  <h3>📑 目录</h3>
+  <ol>
+    <li><a href="#arch">系统架构总览</a></li>
+    <li><a href="#data-flow">四条数据流</a></li>
+    <li><a href="#pages">页面路由（14 页）</a></li>
+    <li><a href="#api">API 端点（50 个）</a></li>
+    <li><a href="#mcp">MCP 工具系统（24 个工具）</a></li>
+    <li><a href="#gateway">Gateway 客户端能力</a></li>
+    <li><a href="#store">状态管理（13 个 Store）</a></li>
+    <li><a href="#db">数据库模型（17 张表）</a></li>
+    <li><a href="#sse">SSE 实时事件（14 种）</a></li>
+    <li><a href="#workspace">Workspace 文件同步</a></li>
+    <li><a href="#heartbeat">心跳任务系统</a></li>
+    <li><a href="#security">安全中间件</a></li>
+    <li><a href="#components">组件架构</a></li>
+    <li><a href="#skills">Skill 参考模板</a></li>
+  </ol>
+</div>
+
+<!-- ====================================== -->
+<h2 id="arch">一、系统架构总览</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart TB
+    subgraph Browser["🌐 浏览器"]
+        direction TB
+        Pages["14 个页面<br/>Dashboard / Tasks / Wiki / Members<br/>Projects / Agents / Sessions / Skills<br/>Schedule / Deliveries / Settings / Chat"]
+        Stores["13 个 Zustand Store<br/>全局状态管理"]
+        SSE_Client["SSE 客户端<br/>实时事件订阅"]
+    end
+
+    subgraph NextJS["🧠 CoMind（Next.js 14）"]
+        direction TB
+        API["50 个 API Route<br/>RESTful + MCP"]
+        MW["Middleware<br/>CSRF · CORS · CSP · 限流"]
+        EventBus["EventBus<br/>SSE 事件广播"]
+        IndexMgr["index-manager<br/>心跳定时器"]
+        ClaudeMdGen["claude-md-generator<br/>CLAUDE.md 生成"]
+        TaskListGen["task-list-generator<br/>TODO/DONE.md 生成"]
+    end
+
+    subgraph Data["💾 数据层"]
+        SQLite[(SQLite<br/>17 张表<br/>Drizzle ORM)]
+        FS["📂 文件系统<br/>.comind-index · CLAUDE.md<br/>HEARTBEAT.md · tasks/"]
+    end
+
+    subgraph Gateway["🌐 OpenClaw Gateway"]
+        GW["WebSocket 服务器<br/>Protocol v3"]
+        Agent["🤖 AI Agent"]
+        Cron["Cron 调度器"]
+        Skills["Skills 引擎"]
+    end
+
+    Pages --> Stores
+    Stores -->|"fetch / mutate"| API
+    SSE_Client -->|"订阅"| EventBus
+    API --> MW
+    API -->|"读写"| SQLite
+    API -->|"emit 事件"| EventBus
+    IndexMgr -->|"每 120s"| FS
+    ClaudeMdGen --> FS
+    TaskListGen --> FS
+
+    Stores -->|"WebSocket<br/>（browser_direct 模式）"| GW
+    API -->|"WebSocket<br/>（server_proxy 模式）"| GW
+    GW <--> Agent
+    Cron --> GW
+    Skills --> Agent
+    Agent -->|"MCP API<br/>Bearer Token"| API
+    Agent -->|"读取"| FS
+
+    style Browser fill:#1c2333,stroke:#30363d,color:#c9d1d9
+    style NextJS fill:#0d1117,stroke:#1f6feb,color:#c9d1d9
+    style Data fill:#0d1117,stroke:#238636,color:#c9d1d9
+    style Gateway fill:#0d1117,stroke:#8b5cf6,color:#c9d1d9
+    style Agent fill:#8b5cf6,stroke:#a78bfa,color:white
+    style SQLite fill:#238636,stroke:#3fb950,color:white
+    style GW fill:#1f6feb,stroke:#58a6ff,color:white
+</pre>
+
+<div class="note">
+<strong>双模式连接</strong>：Gateway 支持两种模式：<code>server_proxy</code>（Next.js 服务端维护 WebSocket）和 <code>browser_direct</code>（浏览器直接连接 Gateway）。生产环境推荐 server_proxy。
+</div>
+
+<!-- ====================================== -->
+<h2 id="data-flow">二、四条数据流</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart LR
+    subgraph P1["① 用户 → SQLite"]
+        U1["React 组件"] --> S1["Zustand Store"]
+        S1 -->|"fetch()"| A1["API Routes"]
+        A1 -->|"Drizzle"| DB1[(SQLite)]
+    end
+
+    style P1 fill:#161b22,stroke:#1f6feb,color:#c9d1d9
+</pre>
+
+<pre class="mermaid">
+flowchart LR
+    subgraph P2["② 用户 → Gateway"]
+        U2["React 组件"] --> S2["Zustand Store"]
+        S2 -->|"WebSocket"| G2["gateway-client.ts"]
+        G2 -->|"Protocol v3"| GW2["OpenClaw Gateway"]
+    end
+
+    style P2 fill:#161b22,stroke:#8b5cf6,color:#c9d1d9
+</pre>
+
+<pre class="mermaid">
+flowchart LR
+    subgraph P3["③ 实时推送"]
+        W3["API 写操作"] -->|"eventBus.emit()"| EB3["EventBus"]
+        EB3 -->|"SSE /api/sse"| DP3["DataProvider"]
+        DP3 -->|"auto-refresh"| ST3["Zustand Stores"]
+    end
+
+    style P3 fill:#161b22,stroke:#3fb950,color:#c9d1d9
+</pre>
+
+<pre class="mermaid">
+flowchart LR
+    subgraph P4["④ AI MCP 指令"]
+        AG4["AI Agent"] -->|"POST /api/mcp/external<br/>Bearer Token"| MCP4["MCP Handler"]
+        MCP4 -->|"DB 写入"| DB4[(SQLite)]
+        MCP4 -->|"SSE 广播"| FE4["前端自动刷新"]
+    end
+
+    style P4 fill:#161b22,stroke:#d29922,color:#c9d1d9
+</pre>
+
+<!-- ====================================== -->
+<h2 id="pages">三、页面路由（14 页）</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart TD
+    Root["/"] -->|"重定向"| Dashboard
+
+    subgraph Core["核心业务"]
+        Dashboard["📊 /dashboard<br/>总览面板"]
+        Tasks["✅ /tasks<br/>看板式任务管理"]
+        Projects["📁 /projects<br/>项目管理"]
+        Members["👥 /members<br/>成员管理"]
+        Wiki["📝 /wiki<br/>文档编辑器"]
+        Deliveries["📦 /deliveries<br/>交付审核"]
+    end
+
+    subgraph AI["AI / Gateway"]
+        Agents["🤖 /agents<br/>Agent 管理"]
+        Sessions["💬 /sessions<br/>会话管理"]
+        Schedule["⏰ /schedule<br/>Cron 定时任务"]
+        Skills_P["🧩 /skills<br/>技能管理"]
+    end
+
+    subgraph Config["配置"]
+        Settings["⚙️ /settings<br/>系统设置"]
+        OpenClaw["🔧 /settings/openclaw<br/>Workspace 配置"]
+    end
+
+    Dashboard --- Tasks
+    Dashboard --- Projects
+    Dashboard --- Members
+    Tasks --- Wiki
+    Wiki --- Deliveries
+    Agents --- Sessions
+    Sessions --- Schedule
+    Schedule --- Skills_P
+
+    style Core fill:#161b22,stroke:#3fb950,color:#c9d1d9
+    style AI fill:#161b22,stroke:#8b5cf6,color:#c9d1d9
+    style Config fill:#161b22,stroke:#d29922,color:#c9d1d9
+</pre>
+
+<div class="grid">
+  <div class="card"><div class="icon">📊</div><h4>Dashboard</h4><p>项目/任务/成员/文档/交付统计卡片，Gateway 健康状态，AI 成员实时工作状态面板</p></div>
+  <div class="card"><div class="icon">✅</div><h4>Tasks</h4><p>看板式任务管理（4 列状态），支持成员/项目筛选，任务抽屉详情含评论/日志/检查项</p></div>
+  <div class="card"><div class="icon">📁</div><h4>Projects</h4><p>项目 CRUD，关联任务/文档查看，支持 OpenClaw 同步</p></div>
+  <div class="card"><div class="icon">👥</div><h4>Members</h4><p>人类/AI 成员管理，AI 成员含 Gateway Agent 绑定、经验数据、API Token 管理</p></div>
+  <div class="card"><div class="icon">📝</div><h4>Wiki</h4><p>Markdown 文档编辑器，8 种文档类型（guide/report/note/decision/scheduled_task/task_list/reference/other）</p></div>
+  <div class="card"><div class="icon">📦</div><h4>Deliveries</h4><p>文档交付审核流程（pending → approved/rejected/revision_needed），支持内部文档和外部链接</p></div>
+  <div class="card"><div class="icon">🤖</div><h4>Agents</h4><p>OpenClaw Agent 管理，创建/删除/文件管理，需 Gateway 连接</p></div>
+  <div class="card"><div class="icon">💬</div><h4>Sessions</h4><p>Gateway 会话列表，支持 thinking/verbose/reasoning 级别设置</p></div>
+  <div class="card"><div class="icon">⏰</div><h4>Schedule</h4><p>Gateway Cron Job 管理（创建/编辑/启停/手动执行），执行历史查看</p></div>
+  <div class="card"><div class="icon">🧩</div><h4>Skills</h4><p>Gateway Skills 查看/启停/安装</p></div>
+  <div class="card"><div class="icon">⚙️</div><h4>Settings</h4><p>语言切换、主题切换、Gateway 配置面板、Workspace 管理</p></div>
+</div>
+
+<!-- ====================================== -->
+<h2 id="api">四、API 端点（50 个）</h2>
+<!-- ====================================== -->
+
+<h3>4.1 核心业务 CRUD</h3>
+
+<table>
+<tr><th>资源</th><th>集合路由</th><th>单体路由</th><th>扩展路由</th></tr>
+<tr><td>项目</td><td><code>GET POST</code> /api/projects</td><td><code>GET PUT DELETE</code> /api/projects/[id]</td><td>—</td></tr>
+<tr><td>任务</td><td><code>GET POST</code> /api/tasks</td><td><code>GET PUT DELETE</code> /api/tasks/[id]</td><td><code>POST</code> /api/task-push<br/><code>POST</code> /api/batch-task-push</td></tr>
+<tr><td>成员</td><td><code>GET</code> /api/members</td><td><code>GET PUT DELETE</code> /api/members/[id]</td><td><code>POST</code> /api/members/[id]/quick-setup</td></tr>
+<tr><td>文档</td><td><code>GET POST</code> /api/documents</td><td><code>GET PUT DELETE</code> /api/documents/[id]</td><td>—</td></tr>
+<tr><td>评论</td><td><code>GET POST</code> /api/comments</td><td><code>GET DELETE</code> /api/comments/[id]</td><td>—</td></tr>
+<tr><td>交付</td><td><code>GET POST</code> /api/deliveries</td><td><code>GET PUT DELETE</code> /api/deliveries/[id]</td><td>—</td></tr>
+<tr><td>定时任务</td><td><code>GET POST</code> /api/scheduled-tasks</td><td><code>GET PUT DELETE</code> /api/scheduled-tasks/[id]</td><td>—</td></tr>
+<tr><td>执行历史</td><td><code>GET POST</code> /api/scheduled-task-history</td><td><code>PUT DELETE</code> ...history/[id]</td><td>—</td></tr>
+<tr><td>任务日志</td><td><code>GET POST</code> /api/task-logs</td><td>—</td><td>—</td></tr>
+<tr><td>审计日志</td><td><code>GET</code> /api/audit-logs</td><td>—</td><td>—</td></tr>
+<tr><td>模板</td><td><code>GET</code> /api/templates</td><td>—</td><td>—</td></tr>
+</table>
+
+<h3>4.2 聊天系统</h3>
+
+<table>
+<tr><th>路由</th><th>方法</th><th>说明</th></tr>
+<tr><td><code>/api/chat-sessions</code></td><td>GET POST</td><td>会话列表/创建（支持关联 task/project/scheduled_task 实体）</td></tr>
+<tr><td><code>/api/chat-sessions/[id]</code></td><td>GET PUT DELETE</td><td>会话详情/更新/删除</td></tr>
+<tr><td><code>/api/chat-messages</code></td><td>POST</td><td>发送消息</td></tr>
+<tr><td><code>/api/chat-messages/[id]</code></td><td>PUT</td><td>更新消息状态</td></tr>
+<tr><td><code>/api/chat-reply</code></td><td>POST</td><td>AI 回复路由（含 SSRF 防护 + 限流）</td></tr>
+<tr><td><code>/api/chat-actions</code></td><td>POST</td><td>聊天动作处理</td></tr>
+<tr><td><code>/api/chat-context</code></td><td>GET</td><td>获取聊天上下文</td></tr>
+</table>
+
+<h3>4.3 MCP · Gateway · OpenClaw</h3>
+
+<table>
+<tr><th>分类</th><th>路由</th><th>方法</th><th>说明</th></tr>
+<tr><td><span class="badge badge-orange">MCP</span></td><td><code>/api/mcp</code></td><td>GET POST</td><td>工具列表 / 工具调用</td></tr>
+<tr><td><span class="badge badge-orange">MCP</span></td><td><code>/api/mcp/external</code></td><td>GET</td><td>外部端点（Bearer Token 鉴权，免 CSRF）</td></tr>
+<tr><td><span class="badge badge-blue">Gateway</span></td><td><code>/api/gateway/config</code></td><td>GET POST DELETE</td><td>Gateway 配置管理</td></tr>
+<tr><td><span class="badge badge-blue">Gateway</span></td><td><code>/api/gateway/reconnect</code></td><td>POST</td><td>重连 Gateway</td></tr>
+<tr><td><span class="badge badge-blue">Gateway</span></td><td><code>/api/gateway/request</code></td><td>POST</td><td>代理请求到 Gateway</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>/api/openclaw-status</code></td><td>GET POST</td><td>AI 实时状态</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>/api/openclaw-workspaces</code></td><td>GET POST</td><td>Workspace 列表/创建</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>/api/openclaw-workspaces/[id]</code></td><td>GET PUT DELETE</td><td>Workspace 详情/更新/删除</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...workspaces/[id]/scan</code></td><td>POST</td><td>扫描文件</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...workspaces/[id]/sync</code></td><td>POST</td><td>同步文件</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...workspaces/[id]/status</code></td><td>GET</td><td>同步状态</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>/api/openclaw-files</code></td><td>GET</td><td>文件列表</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>/api/openclaw-files/[id]</code></td><td>GET</td><td>文件详情</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...files/[id]/pull</code></td><td>POST</td><td>拉取文件</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...files/[id]/push</code></td><td>POST</td><td>推送文件</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...files/[id]/rollback</code></td><td>POST</td><td>回滚版本</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...files/[id]/versions</code></td><td>GET</td><td>版本历史</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>/api/openclaw-conflicts</code></td><td>GET</td><td>冲突列表</td></tr>
+<tr><td><span class="badge badge-purple">OpenClaw</span></td><td><code>...conflicts/[id]/resolve</code></td><td>POST</td><td>解决冲突</td></tr>
+<tr><td><span class="badge badge-green">基础设施</span></td><td><code>/api/sse</code></td><td>GET</td><td>SSE 事件流</td></tr>
+<tr><td><span class="badge badge-green">基础设施</span></td><td><code>/api/heartbeat/start</code></td><td>POST</td><td>启动心跳</td></tr>
+</table>
+
+<!-- ====================================== -->
+<h2 id="mcp">五、MCP 工具系统（24 个工具）</h2>
+<!-- ====================================== -->
+
+<div class="note purple">
+<strong>MCP（Model Context Protocol）</strong>是 AI Agent 与 CoMind 交互的标准接口。Agent 通过 <code>POST /api/mcp/external</code>（Bearer Token 鉴权）调用工具，身份自动注入。
+</div>
+
+<pre class="mermaid">
+flowchart TD
+    Agent["🤖 AI Agent"] -->|"POST /api/mcp/external<br/>Bearer Token"| Router["MCP Router"]
+
+    Router --> TaskH["📋 任务域"]
+    Router --> DocH["📝 文档域"]
+    Router --> StatusH["📡 状态域"]
+    Router --> ScheduleH["⏰ 调度域"]
+    Router --> DeliveryH["📦 交付域"]
+    Router --> MemberH["👤 成员域"]
+    Router --> TemplateH["📄 模板域"]
+
+    TaskH --> T1["get_task"]
+    TaskH --> T2["list_my_tasks"]
+    TaskH --> T3["update_task_status"]
+    TaskH --> T4["add_task_comment"]
+    TaskH --> T5["create_check_item"]
+    TaskH --> T6["complete_check_item"]
+
+    DocH --> D1["get_document"]
+    DocH --> D2["create_document"]
+    DocH --> D3["update_document"]
+    DocH --> D4["search_documents"]
+
+    StatusH --> S1["update_status"]
+    StatusH --> S2["set_queue"]
+    StatusH --> S3["set_do_not_disturb"]
+
+    ScheduleH --> SC1["create_schedule"]
+    ScheduleH --> SC2["list_schedules"]
+    ScheduleH --> SC3["update_schedule"]
+    ScheduleH --> SC4["delete_schedule"]
+
+    DeliveryH --> DL1["deliver_document"]
+    DeliveryH --> DL2["review_delivery"]
+
+    MemberH --> M1["register_member"]
+    MemberH --> M2["get_project"]
+    MemberH --> M3["get_project_members"]
+
+    TemplateH --> TM1["get_template"]
+    TemplateH --> TM2["list_templates"]
+
+    style Agent fill:#8b5cf6,stroke:#a78bfa,color:white
+    style Router fill:#1f6feb,stroke:#58a6ff,color:white
+    style TaskH fill:#238636,stroke:#3fb950,color:white
+    style DocH fill:#d29922,stroke:#e3b341,color:white
+    style StatusH fill:#da3633,stroke:#f85149,color:white
+    style ScheduleH fill:#1f6feb,stroke:#58a6ff,color:white
+    style DeliveryH fill:#8b5cf6,stroke:#a78bfa,color:white
+    style MemberH fill:#3fb950,stroke:#56d364,color:white
+    style TemplateH fill:#6e7681,stroke:#8b949e,color:white
+</pre>
+
+<table>
+<tr><th>工具名</th><th>域</th><th>描述</th></tr>
+<tr><td><code>get_task</code></td><td><span class="badge badge-green">任务</span></td><td>获取任务详情（标题、描述、状态、负责人等）</td></tr>
+<tr><td><code>list_my_tasks</code></td><td><span class="badge badge-green">任务</span></td><td>获取分配给当前 AI 成员的任务，支持状态/昵称/项目筛选</td></tr>
+<tr><td><code>update_task_status</code></td><td><span class="badge badge-green">任务</span></td><td>更新任务状态（todo → in_progress → reviewing → completed）</td></tr>
+<tr><td><code>add_task_comment</code></td><td><span class="badge badge-green">任务</span></td><td>向任务添加评论（汇报进度、提问、提交结果）</td></tr>
+<tr><td><code>create_check_item</code></td><td><span class="badge badge-green">任务</span></td><td>为任务创建检查项（子任务）</td></tr>
+<tr><td><code>complete_check_item</code></td><td><span class="badge badge-green">任务</span></td><td>完成检查项</td></tr>
+<tr><td><code>get_document</code></td><td><span class="badge badge-orange">文档</span></td><td>获取 Wiki 文档内容（按 ID 或标题）</td></tr>
+<tr><td><code>create_document</code></td><td><span class="badge badge-orange">文档</span></td><td>创建新 Wiki 文档（Markdown，支持文档类型）</td></tr>
+<tr><td><code>update_document</code></td><td><span class="badge badge-orange">文档</span></td><td>更新 Wiki 文档内容</td></tr>
+<tr><td><code>search_documents</code></td><td><span class="badge badge-orange">文档</span></td><td>搜索 Wiki 文档</td></tr>
+<tr><td><code>update_status</code></td><td><span class="badge badge-red">状态</span></td><td>更新 AI 实时状态面板（idle/working/waiting/offline）</td></tr>
+<tr><td><code>set_queue</code></td><td><span class="badge badge-red">状态</span></td><td>设置任务队列（显示接下来要做的任务）</td></tr>
+<tr><td><code>set_do_not_disturb</code></td><td><span class="badge badge-red">状态</span></td><td>设置免打扰模式</td></tr>
+<tr><td><code>create_schedule</code></td><td><span class="badge badge-blue">调度</span></td><td>创建定时任务（once/daily/weekly/monthly）</td></tr>
+<tr><td><code>list_schedules</code></td><td><span class="badge badge-blue">调度</span></td><td>获取定时任务列表</td></tr>
+<tr><td><code>update_schedule</code></td><td><span class="badge badge-blue">调度</span></td><td>更新定时任务配置</td></tr>
+<tr><td><code>delete_schedule</code></td><td><span class="badge badge-blue">调度</span></td><td>删除定时任务</td></tr>
+<tr><td><code>deliver_document</code></td><td><span class="badge badge-purple">交付</span></td><td>提交文档交付（内部文档或外部链接）</td></tr>
+<tr><td><code>review_delivery</code></td><td><span class="badge badge-purple">交付</span></td><td>审核文档交付（approved/rejected/revision_needed）</td></tr>
+<tr><td><code>register_member</code></td><td><span class="badge badge-green">成员</span></td><td>AI 成员自注册（幂等，相同 endpoint 更新已有记录）</td></tr>
+<tr><td><code>get_project</code></td><td><span class="badge badge-green">成员</span></td><td>获取项目详情</td></tr>
+<tr><td><code>get_project_members</code></td><td><span class="badge badge-green">成员</span></td><td>获取项目成员列表</td></tr>
+<tr><td><code>get_template</code></td><td>模板</td><td>获取渲染后的模板（Mustache 变量替换）</td></tr>
+<tr><td><code>list_templates</code></td><td>模板</td><td>列出所有可用模板</td></tr>
+</table>
+
+<!-- ====================================== -->
+<h2 id="gateway">六、Gateway 客户端能力</h2>
+<!-- ====================================== -->
+
+<div class="note">
+<strong>OpenClaw Gateway Protocol v3</strong>：基于 WebSocket 的双向通信协议。握手流程：challenge → connect（token + role: operator）→ hello-ok。支持 30s 超时的 Request/Response 模型。
+</div>
+
+<pre class="mermaid">
+flowchart LR
+    subgraph Connect["连接管理"]
+        C1["connect()"]
+        C2["disconnect()"]
+        C3["scheduleReconnect()<br/>指数退避 1s~60s"]
+    end
+
+    subgraph Query["查询操作"]
+        Q1["getSnapshot()"]
+        Q2["getHealth()"]
+        Q3["listAgents()"]
+        Q4["listSessions()"]
+        Q5["listCronJobs()"]
+        Q6["listSkills()"]
+        Q7["getConfig()"]
+        Q8["getChatHistory()"]
+        Q9["getCronRuns()"]
+    end
+
+    subgraph Mutate["变更操作"]
+        M1["createAgent / deleteAgent"]
+        M2["patchSession / deleteSession"]
+        M3["createCronJob / updateCronJob<br/>deleteCronJob / toggleCronJob<br/>runCronJob"]
+        M4["toggleSkill / installSkill"]
+        M5["setConfig / reloadConfig"]
+        M6["sendChatMessage<br/>（含 idempotencyKey 去重）"]
+        M7["abortChat"]
+    end
+
+    subgraph Events["事件系统"]
+        E1["onEvent(handler)"]
+        E2["setMcpConfigCallback()"]
+    end
+
+    style Connect fill:#161b22,stroke:#1f6feb,color:#c9d1d9
+    style Query fill:#161b22,stroke:#3fb950,color:#c9d1d9
+    style Mutate fill:#161b22,stroke:#d29922,color:#c9d1d9
+    style Events fill:#161b22,stroke:#a78bfa,color:#c9d1d9
+</pre>
+
+<!-- ====================================== -->
+<h2 id="store">七、状态管理（13 个 Zustand Store）</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart TD
+    Init["useDataInitializer()<br/>Promise.allSettled 并发初始化"] --> PS & TS & MS & DS & DvS & SS & CSS & OCS & OWS
+
+    subgraph Core_S["核心业务 Store"]
+        PS["useProjectStore<br/>项目 CRUD"]
+        TS["useTaskStore<br/>任务 CRUD + 筛选"]
+        MS["useMemberStore<br/>成员管理"]
+        DS["useDocumentStore<br/>文档 CRUD"]
+        DvS["useDeliveryStore<br/>交付管理"]
+        CSS["useChatStore<br/>聊天会话/消息"]
+    end
+
+    subgraph AI_S["AI/Gateway Store"]
+        GS["useGatewayStore (39KB)<br/>最大 Store：connect · agents<br/>sessions · cron · skills<br/>chat · config · 实时推送"]
+        OCS["useOpenClawStatusStore<br/>AI 实时状态面板"]
+        OWS["useOpenClawWorkspaceStore<br/>Workspace 管理"]
+        SS["useScheduledTaskStore<br/>定时任务"]
+    end
+
+    subgraph Support_S["辅助 Store"]
+        CS["useCommentStore<br/>任务评论"]
+        TLS["useTaskLogStore<br/>任务日志"]
+        UI["useUIStore (persist)<br/>侧栏 · 聊天 · 主题"]
+    end
+
+    style Init fill:#1f6feb,stroke:#58a6ff,color:white
+    style Core_S fill:#161b22,stroke:#3fb950,color:#c9d1d9
+    style AI_S fill:#161b22,stroke:#8b5cf6,color:#c9d1d9
+    style Support_S fill:#161b22,stroke:#6e7681,color:#c9d1d9
+</pre>
+
+<!-- ====================================== -->
+<h2 id="db">八、数据库模型（17 张表）</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+erDiagram
+    projects ||--o{ tasks : "1:N"
+    projects ||--o{ documents : "1:N"
+    members ||--o{ tasks : "assignees (JSON)"
+    members ||--o{ openclaw_status : "1:1"
+    members ||--o{ openclaw_workspaces : "1:N"
+    tasks ||--o{ comments : "1:N"
+    tasks ||--o{ task_logs : "1:N"
+    tasks ||--o{ tasks : "parent (self-ref)"
+    documents ||--o{ deliveries : "1:N"
+    openclaw_workspaces ||--o{ openclaw_files : "1:N"
+    openclaw_files ||--o{ openclaw_versions : "1:N"
+    openclaw_files ||--o{ openclaw_conflicts : "1:N"
+    scheduled_tasks ||--o{ scheduled_task_history : "1:N"
+
+    projects {
+        text id PK
+        text name
+        text description
+        text source "local | openclaw"
+    }
+    tasks {
+        text id PK
+        text title
+        text status "todo | in_progress | reviewing | completed"
+        text priority "high | medium | low"
+        integer progress
+        text assignees "JSON array"
+        text check_items "JSON array"
+    }
+    members {
+        text id PK
+        text name
+        text type "human | ai"
+        text openclaw_agent_id
+        text openclaw_api_token
+    }
+    documents {
+        text id PK
+        text title
+        text type "guide | report | note | decision | ..."
+        text content "Markdown"
+        text source "local | external | openclaw"
+    }
+</pre>
+
+<table>
+<tr><th>分类</th><th>表名</th><th>说明</th></tr>
+<tr><td rowspan="6"><span class="badge badge-green">核心</span></td><td><code>projects</code></td><td>项目（支持 local/openclaw 来源）</td></tr>
+<tr><td><code>tasks</code></td><td>任务（含检查项、附件、跨项目关联、子任务）</td></tr>
+<tr><td><code>members</code></td><td>成员（human/ai，含 Gateway 关联字段）</td></tr>
+<tr><td><code>documents</code></td><td>Wiki 文档（8 种类型，支持双向链接）</td></tr>
+<tr><td><code>comments</code></td><td>任务评论</td></tr>
+<tr><td><code>task_logs</code></td><td>任务操作日志</td></tr>
+<tr><td rowspan="3"><span class="badge badge-orange">调度</span></td><td><code>scheduled_tasks</code></td><td>定时任务（once/daily/weekly/monthly）</td></tr>
+<tr><td><code>scheduled_task_history</code></td><td>执行历史</td></tr>
+<tr><td><code>deliveries</code></td><td>文档交付（多平台、版本链、审核流程）</td></tr>
+<tr><td rowspan="2"><span class="badge badge-blue">聊天</span></td><td><code>chat_sessions</code></td><td>聊天会话（支持实体关联）</td></tr>
+<tr><td><code>chat_messages</code></td><td>聊天消息（user/assistant/system）</td></tr>
+<tr><td rowspan="5"><span class="badge badge-purple">OpenClaw</span></td><td><code>openclaw_workspaces</code></td><td>Workspace 配置</td></tr>
+<tr><td><code>openclaw_files</code></td><td>同步文件（哈希、版本、同步状态）</td></tr>
+<tr><td><code>openclaw_versions</code></td><td>文件版本历史</td></tr>
+<tr><td><code>openclaw_conflicts</code></td><td>同步冲突</td></tr>
+<tr><td><code>openclaw_status</code></td><td>AI 实时工作状态</td></tr>
+<tr><td rowspan="2"><span class="badge badge-red">基础设施</span></td><td><code>gateway_configs</code></td><td>Gateway 连接配置</td></tr>
+<tr><td><code>audit_logs</code></td><td>审计日志</td></tr>
+</table>
+
+<!-- ====================================== -->
+<h2 id="sse">九、SSE 实时事件（14 种）</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart LR
+    subgraph Source["事件源"]
+        API_Write["API 写操作"]
+        GW_Event["Gateway 事件"]
+    end
+
+    EB["EventBus<br/>30s 心跳<br/>自动清理死连接"] 
+
+    subgraph Events["14 种事件类型"]
+        direction TB
+        E_Biz["业务事件<br/>task_update · delivery_update<br/>schedule_update · document_update<br/>member_update · chat_session_update"]
+        E_OC["OpenClaw 事件<br/>openclaw_status"]
+        E_GW["Gateway 事件<br/>gateway_event · gateway_agent_update<br/>gateway_session_update · gateway_chat_event<br/>gateway_cron_update · gateway_config_update<br/>gateway_status_update"]
+    end
+
+    subgraph Consumer["消费端"]
+        DP["DataProvider<br/>自动 refresh Store"]
+    end
+
+    API_Write -->|"eventBus.emit()"| EB
+    GW_Event -->|"eventBus.emit()"| EB
+    EB -->|"SSE /api/sse"| Events
+    Events --> Consumer
+
+    style EB fill:#1f6feb,stroke:#58a6ff,color:white
+    style E_Biz fill:#161b22,stroke:#3fb950,color:#c9d1d9
+    style E_OC fill:#161b22,stroke:#d29922,color:#c9d1d9
+    style E_GW fill:#161b22,stroke:#8b5cf6,color:#c9d1d9
+</pre>
+
+<!-- ====================================== -->
+<h2 id="workspace">十、Workspace 文件同步</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart TD
+    subgraph WS_Dir["📂 Workspace 目录结构"]
+        direction TB
+        IDX[".comind-index<br/>YAML 索引<br/>heartbeat + files 映射"]
+        CMD["CLAUDE.md<br/>静态规范 + 动态数据段"]
+        HB["HEARTBEAT.md<br/>心跳清单入口<br/>标记段幂等更新"]
+        TODO["tasks/TODO.md<br/>待处理 + 进行中任务"]
+        DONE["tasks/DONE.md<br/>近 24h 完成任务"]
+        HB1["tasks/heartbeat-check-progress.md"]
+        HB2["tasks/heartbeat-daily-report.md"]
+        HB3["tasks/heartbeat-sync-to-comind.md"]
+    end
+
+    subgraph Auto["🤖 自动维护（每 120s）"]
+        IM["index-manager<br/>updateHeartbeat()"]
+        TLG["task-list-generator<br/>refreshTaskList()"]
+    end
+
+    subgraph Init["🏗️ 创建时初始化"]
+        CM["claude-md-generator<br/>refreshClaudeMd()"]
+        RI["index-manager<br/>refreshIndex()"]
+        GHF["generateHeartbeatFiles()"]
+    end
+
+    IM -->|"更新时间戳"| IDX
+    TLG -->|"hash 对比<br/>有变更才写入"| TODO
+    TLG -->|"hash 对比<br/>有变更才写入"| DONE
+
+    RI --> IDX
+    CM --> CMD
+    GHF --> HB
+    GHF --> HB1
+    GHF --> HB2
+    GHF --> HB3
+
+    style Auto fill:#161b22,stroke:#da3633,color:#c9d1d9
+    style Init fill:#161b22,stroke:#238636,color:#c9d1d9
+    style WS_Dir fill:#161b22,stroke:#d29922,color:#c9d1d9
+</pre>
+
+<div class="note success">
+<strong>文件同步特性</strong>：
+<br/>• 版本控制：每次变更保存完整/差异版本到 <code>openclaw_versions</code> 表
+<br/>• 冲突检测：本地和远端同时修改时进入 <code>openclaw_conflicts</code>，支持手动解决
+<br/>• 增量同步：基于 <code>.comind-index</code> 的文件 hash 对比，只同步变更文件
+<br/>• 文件监听：<code>watcher.ts</code> 实时监控 workspace 文件变更（排除 node_modules/.git/tasks 等）
+</div>
+
+<!-- ====================================== -->
+<h2 id="heartbeat">十一、心跳任务系统</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+sequenceDiagram
+    participant Cron as ⏰ OpenClaw Cron
+    participant GW as 🌐 Gateway
+    participant Agent as 🤖 AI Agent
+    participant FS as 📂 Workspace
+    participant API as 🧠 CoMind MCP
+
+    Note over Cron: 定时触发（Cron Job 配置）
+    Cron->>GW: 触发 Job
+    GW->>Agent: sendChatMessage<br/>"执行心跳任务：check-progress"
+
+    rect rgb(22, 27, 34)
+        Note over Agent: Agent 优先读取本地文件
+        Agent->>FS: 📖 tasks/TODO.md（任务列表）
+        Agent->>FS: 📖 tasks/DONE.md（完成列表）
+        Agent->>FS: 📖 .comind-index（文件索引）
+        Agent->>FS: 📖 CLAUDE.md（项目/成员上下文）
+    end
+
+    Note over Agent: 仅在文件缺失时回退 API
+    Agent-->>API: POST /api/mcp/external<br/>（仅 fallback 时调用）
+
+    Agent->>Agent: 💬 在对话中回复巡检报告
+    Agent->>GW: 对话回复 + Actions JSON<br/>（update_status, set_queue）
+    GW->>API: 执行 Actions
+    API->>API: SSE 广播 → 前端刷新
+</pre>
+
+<table>
+<tr><th>心跳任务</th><th>触发频率</th><th>数据源</th><th>核心动作</th></tr>
+<tr>
+  <td><strong>check-progress</strong><br/>任务进展巡检</td>
+  <td>每 30 分钟</td>
+  <td><code>tasks/TODO.md</code><br/><code>.comind-index</code></td>
+  <td>分类任务 → 检测卡住/超期 → 巡检报告</td>
+</tr>
+<tr>
+  <td><strong>daily-report</strong><br/>日报生成</td>
+  <td>每天 18:00/23:00</td>
+  <td><code>tasks/TODO.md</code><br/><code>tasks/DONE.md</code><br/><code>CLAUDE.md</code></td>
+  <td>收集数据 → 生成日报文档 → 对话总结</td>
+</tr>
+<tr>
+  <td><strong>sync-to-comind</strong><br/>状态同步</td>
+  <td>每 5-10 分钟</td>
+  <td><code>tasks/TODO.md</code><br/><code>.comind-index</code></td>
+  <td>同步状态面板 → 检测文件变更 → 同步文档</td>
+</tr>
+</table>
+
+<div class="note warn">
+<strong>Token 优化</strong>：心跳 Skill 优先读取本地 <code>tasks/TODO.md</code> + <code>tasks/DONE.md</code>（CoMind 心跳自动维护），避免调用 MCP API <code>list_my_tasks</code>，大幅降低每次心跳的 token 消耗。
+</div>
+
+<!-- ====================================== -->
+<h2 id="security">十二、安全中间件</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart LR
+    Req["HTTP 请求"] --> MW{"Middleware<br/>(/api/* 路由)"}
+
+    MW --> H1["🔒 安全响应头<br/>X-Content-Type-Options<br/>X-Frame-Options: DENY<br/>X-XSS-Protection<br/>Referrer-Policy"]
+    MW --> H2["🛡️ CSP 策略<br/>限制 script/style/img<br/>允许 ws/wss"]
+    MW --> H3["🌐 CORS<br/>基于 ALLOWED_ORIGINS<br/>开发模式允许 localhost"]
+    MW --> H4["📏 请求体限制<br/>POST/PUT/PATCH ≤ 1MB"]
+    MW --> H5["🚫 CSRF 防护<br/>检查 Origin/Referer<br/>/api/mcp/external 豁免"]
+    MW --> H6["🔑 请求追踪<br/>X-Request-Id (UUID)"]
+
+    H1 & H2 & H3 & H4 & H5 & H6 --> Res["✅ API Handler"]
+
+    style MW fill:#da3633,stroke:#f85149,color:white
+    style Res fill:#238636,stroke:#3fb950,color:white
+</pre>
+
+<!-- ====================================== -->
+<h2 id="components">十三、组件架构</h2>
+<!-- ====================================== -->
+
+<pre class="mermaid">
+flowchart TD
+    subgraph Layout["布局层"]
+        AppShell["AppShell<br/>应用外壳"]
+        Header["Header<br/>页面头部"]
+        Sidebar["Sidebar (23KB)<br/>侧边导航"]
+        ThemeP["ThemeProvider<br/>主题管理"]
+        DataP["DataProvider<br/>SSE + 数据初始化"]
+    end
+
+    subgraph Business["业务组件"]
+        TaskDrawer["TaskDrawer (28KB)<br/>任务详情抽屉<br/>评论/日志/检查项"]
+        MarkdownEd["MarkdownEditor (12KB)<br/>Markdown 编辑器"]
+        DocPicker["DocumentPicker<br/>文档选择器"]
+        GWRequired["GatewayRequired<br/>连接守卫"]
+    end
+
+    subgraph Chat_C["聊天组件"]
+        ChatPanel["ChatPanel (669行)<br/>聊天主面板·协调器"]
+        ChatInput["ChatInputArea<br/>统一输入区"]
+        ChatMsgList["ChatMessageList<br/>统一消息列表"]
+        ChatSessions["ChatSessionList<br/>会话列表"]
+        ChatDrawer["ChatDrawer<br/>聊天抽屉"]
+        ChatFab["ChatFab<br/>浮动按钮"]
+        ChatMD["ChatMarkdown<br/>消息渲染"]
+    end
+
+    subgraph OC["OpenClaw 组件"]
+        WSCard["WorkspaceCard"]
+        WSForm["WorkspaceForm"]
+        GWPanel["GatewayConfigPanel"]
+    end
+
+    subgraph UI_C["基础 UI (15 个 shadcn)"]
+        UI_List["Badge · Button · Card · Dialog<br/>Dropdown · Input · Label · Progress<br/>Select · Spinner · Switch · Table<br/>Tabs · Textarea"]
+    end
+
+    AppShell --> Sidebar
+    AppShell --> Header
+    Layout --> Business
+    Layout --> Chat_C
+    Business --> UI_C
+    Chat_C --> UI_C
+
+    style Layout fill:#161b22,stroke:#1f6feb,color:#c9d1d9
+    style Business fill:#161b22,stroke:#3fb950,color:#c9d1d9
+    style Chat_C fill:#161b22,stroke:#8b5cf6,color:#c9d1d9
+    style OC fill:#161b22,stroke:#d29922,color:#c9d1d9
+    style UI_C fill:#161b22,stroke:#6e7681,color:#c9d1d9
+</pre>
+
+<!-- ====================================== -->
+<h2 id="skills">十四、Skill 参考模板（15 个）</h2>
+<!-- ====================================== -->
+
+<table>
+<tr><th>分类</th><th>文件</th><th>说明</th></tr>
+<tr><td rowspan="3"><span class="badge badge-red">心跳</span></td><td><code>heartbeat-check-progress.md</code></td><td>任务进展巡检（高优先级，每次心跳轮换）</td></tr>
+<tr><td><code>heartbeat-daily-report.md</code></td><td>日报生成（中优先级，仅 17:00-23:59）</td></tr>
+<tr><td><code>heartbeat-sync-to-comind.md</code></td><td>状态同步（低优先级，最轻量）</td></tr>
+<tr><td rowspan="3"><span class="badge badge-blue">聊天</span></td><td><code>chat-task.md</code></td><td>聊天-任务上下文模板</td></tr>
+<tr><td><code>chat-project.md</code></td><td>聊天-项目上下文模板</td></tr>
+<tr><td><code>chat-schedule.md</code></td><td>聊天-定时任务上下文模板</td></tr>
+<tr><td rowspan="4"><span class="badge badge-orange">文档模板</span></td><td><code>doc-template-decision.md</code></td><td>决策文档模板</td></tr>
+<tr><td><code>doc-template-report.md</code></td><td>报告文档模板</td></tr>
+<tr><td><code>doc-template-scheduled-task.md</code></td><td>定时任务文档模板</td></tr>
+<tr><td><code>doc-template-task-list.md</code></td><td>任务列表文档模板</td></tr>
+<tr><td rowspan="5"><span class="badge badge-green">业务</span></td><td><code>system-info.md</code></td><td>系统信息模板</td></tr>
+<tr><td><code>task-push.md</code></td><td>任务推送模板</td></tr>
+<tr><td><code>task-board.md</code></td><td>任务看板模板</td></tr>
+<tr><td><code>deliveries.md</code></td><td>交付管理模板</td></tr>
+<tr><td><code>schedules.md</code></td><td>定时任务模板</td></tr>
+</table>
+
+<hr/>
+
+<div class="note">
+<strong>技术栈总结</strong>：Next.js 14 App Router · TypeScript Strict · Zustand · Drizzle ORM · SQLite (WAL) · WebSocket (OpenClaw Protocol v3) · SSE · Tailwind CSS · shadcn/ui · lucide-react · react-i18next (en/zh) · Mermaid (可视化)
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'dark',
+  flowchart: { curve: 'basis', padding: 15 },
+  sequence: { actorMargin: 30, messageFontSize: 13, noteMargin: 10 },
+  er: { fontSize: 12 }
+});
+</script>
+</body>
+</html>
