@@ -2437,6 +2437,8 @@ Dashboard 预览
           category TEXT,
           source TEXT NOT NULL DEFAULT 'unknown',
           sop_template_id TEXT,
+          sop_template_version TEXT,
+          sop_update_available INTEGER DEFAULT 0,
           created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
           trust_status TEXT NOT NULL DEFAULT 'pending',
           is_sensitive INTEGER DEFAULT 0,
@@ -2482,6 +2484,26 @@ Dashboard 预览
       }
     } catch (err) {
       console.error('[TeamClaw] Failed to migrate skills.created_by:', err);
+    }
+  }
+
+  // ===== v3.0 SkillHub: skills 表 SOP 关联字段迁移 =====
+  if (tableNames.includes('skills')) {
+    try {
+      const skillCols = sqlite.prepare("PRAGMA table_info('skills')").all() as { name: string }[];
+      const skillColNames = skillCols.map(c => c.name);
+      
+      if (!skillColNames.includes('sop_template_version')) {
+        console.log('[TeamClaw] Adding sop_template_version column to skills table...');
+        sqlite.exec('ALTER TABLE skills ADD COLUMN sop_template_version TEXT');
+      }
+      
+      if (!skillColNames.includes('sop_update_available')) {
+        console.log('[TeamClaw] Adding sop_update_available column to skills table...');
+        sqlite.exec('ALTER TABLE skills ADD COLUMN sop_update_available INTEGER DEFAULT 0');
+      }
+    } catch (err) {
+      console.error('[TeamClaw] Failed to migrate skills SOP columns:', err);
     }
   }
 
