@@ -317,7 +317,7 @@ export async function discoverSkills(): Promise<DiscoveryResult> {
 
 /**
  * 对比发现的 Skill 与已安装的 Skill
- * 填充 installStatus、installedVersion、installedId
+ * 填充 installStatus、installedVersion、installedId 和 localStatus
  */
 export function compareWithInstalledSkills(
   discovered: DiscoveredSkill[],
@@ -328,20 +328,31 @@ export function compareWithInstalledSkills(
       inst => inst.skillKey === skill.skillKey
     );
     
+    // 未在数据库中找到记录
     if (!installedSkill) {
       return {
         ...skill,
+        localStatus: 'not_recorded' as const,
         installStatus: 'not_installed' as const,
       };
     }
     
-    const installedVersion = installedSkill.version || '1.0.0';
-    const isHigherVersion = isVersionHigher(skill.version, installedVersion);
+    const localVersion = installedSkill.version || '1.0.0';
+    const localStatus = installedSkill.status as 'draft' | 'pending_approval' | 'active' | 'rejected';
+    const isHigherVersion = isVersionHigher(skill.version, localVersion);
+    
+    // active 状态才算是已安装到 Gateway
+    const installStatus = localStatus === 'active' 
+      ? (isHigherVersion ? 'update_available' as const : 'installed' as const)
+      : 'not_installed' as const;
     
     return {
       ...skill,
-      installStatus: isHigherVersion ? 'update_available' as const : 'installed' as const,
-      installedVersion,
+      localStatus,
+      localVersion,
+      localId: installedSkill.id,
+      installStatus,
+      installedVersion: localVersion,
       installedId: installedSkill.id,
     };
   });

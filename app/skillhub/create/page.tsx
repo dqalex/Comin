@@ -36,6 +36,11 @@ interface DiscoveredSkill {
   valid: boolean;
   errors: string[];
   warnings: string[];
+  // 本地记录状态
+  localStatus: 'not_recorded' | 'draft' | 'pending_approval' | 'active' | 'rejected';
+  localVersion?: string;
+  localId?: string;
+  // 安装状态（对比版本）
   installStatus: 'not_installed' | 'installed' | 'update_available';
   installedVersion?: string;
   installedId?: string;
@@ -205,24 +210,38 @@ export default function CreateSkillPage() {
                   {skill.namespace}
                 </span>
                 
-                {skill.installStatus === 'installed' && (
-                  <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                    <Check className="w-3 h-3" />
-                    {t('skillhub.install.installed')} v{skill.installedVersion}
+                {/* 显示本地记录状态和 Gateway 激活状态 */}
+                {skill.localStatus === 'active' ? (
+                  skill.installStatus === 'update_available' ? (
+                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                      <Upload className="w-3 h-3" />
+                      可更新 v{skill.localVersion} → v{skill.version}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                      <Check className="w-3 h-3" />
+                      已激活 v{skill.localVersion}
+                    </span>
+                  )
+                ) : skill.localStatus === 'draft' ? (
+                  <span className="flex items-center gap-1 text-slate-500">
+                    <AlertCircle className="w-3 h-3" />
+                    本地草稿 v{skill.localVersion}
                   </span>
-                )}
-                
-                {skill.installStatus === 'update_available' && (
-                  <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                    <Upload className="w-3 h-3" />
-                    {t('skillhub.install.updateAvailable')} v{skill.installedVersion} → v{skill.version}
+                ) : skill.localStatus === 'pending_approval' ? (
+                  <span className="flex items-center gap-1 text-amber-500">
+                    <AlertCircle className="w-3 h-3" />
+                    审批中 v{skill.localVersion}
                   </span>
-                )}
-                
-                {skill.installStatus === 'not_installed' && (
-                  <span className="flex items-center gap-1">
+                ) : skill.localStatus === 'rejected' ? (
+                  <span className="flex items-center gap-1 text-red-500">
+                    <X className="w-3 h-3" />
+                    已拒绝
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1" style={{ color: 'var(--text-tertiary)' }}>
                     <Download className="w-3 h-3" />
-                    {t('skillhub.install.notInstalled')}
+                    未安装
                   </span>
                 )}
               </div>
@@ -243,7 +262,8 @@ export default function CreateSkillPage() {
             </div>
             
             <div className="flex flex-col gap-2">
-              {skill.installStatus === 'not_installed' && skill.valid && (
+              {/* 未记录或已拒绝：显示安装按钮 */}
+              {(skill.localStatus === 'not_recorded' || skill.localStatus === 'rejected') && skill.valid && (
                 <Button
                   size="sm"
                   onClick={() => handleInstall(skill)}
@@ -259,7 +279,34 @@ export default function CreateSkillPage() {
                 </Button>
               )}
               
-              {skill.installStatus === 'update_available' && (
+              {/* 草稿状态：显示查看详情按钮 */}
+              {skill.localStatus === 'draft' && skill.localId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/skillhub/${skill.localId}`)}
+                  className="flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  查看详情
+                </Button>
+              )}
+              
+              {/* 审批中：禁用按钮 */}
+              {skill.localStatus === 'pending_approval' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled
+                  className="flex items-center gap-1"
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  审批中
+                </Button>
+              )}
+              
+              {/* 已激活且有更新 */}
+              {skill.localStatus === 'active' && skill.installStatus === 'update_available' && (
                 <Button
                   size="sm"
                   onClick={() => handleInstall(skill)}
@@ -271,27 +318,21 @@ export default function CreateSkillPage() {
                   ) : (
                     <Upload className="w-3 h-3" />
                   )}
-                  {t('skillhub.install.update')}
+                  更新
                 </Button>
               )}
               
-              {skill.installStatus === 'installed' && skill.valid && (
+              {/* 已激活无更新：查看详情 */}
+              {skill.localStatus === 'active' && skill.installStatus === 'installed' && skill.localId && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => skill.installedId && router.push(`/skillhub/${skill.installedId}`)}
+                  onClick={() => router.push(`/skillhub/${skill.localId}`)}
                   className="flex items-center gap-1"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  {t('skillhub.install.view')}
+                  查看
                 </Button>
-              )}
-              
-              {skill.installStatus === 'installed' && !skill.valid && (
-                <span className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {t('skillhub.install.invalid')}
-                </span>
               )}
             </div>
           </div>
@@ -300,11 +341,16 @@ export default function CreateSkillPage() {
     );
   };
   
-  // 按安装状态分组
+  // 按状态分组
   const groupedSkills = {
-    updateAvailable: (discovered || []).filter(s => s.installStatus === 'update_available'),
-    notInstalled: (discovered || []).filter(s => s.installStatus === 'not_installed'),
-    installed: (discovered || []).filter(s => s.installStatus === 'installed'),
+    // 可更新（已激活但版本更高）
+    updateAvailable: (discovered || []).filter(s => s.localStatus === 'active' && s.installStatus === 'update_available'),
+    // 未记录或已拒绝（需要安装）
+    notInstalled: (discovered || []).filter(s => s.localStatus === 'not_recorded' || s.localStatus === 'rejected'),
+    // 草稿和审批中（已记录但未激活）
+    pending: (discovered || []).filter(s => s.localStatus === 'draft' || s.localStatus === 'pending_approval'),
+    // 已激活且最新
+    installed: (discovered || []).filter(s => s.localStatus === 'active' && s.installStatus === 'installed'),
   };
   
   return (
@@ -388,7 +434,7 @@ export default function CreateSkillPage() {
               <div>
                 <h2 className="text-lg font-medium mb-3 flex items-center gap-2">
                   <Upload className="w-4 h-4 text-amber-500" />
-                  {t('skillhub.install.updateAvailableCount', { count: groupedSkills.updateAvailable.length })}
+                  可更新 ({groupedSkills.updateAvailable.length})
                 </h2>
                 <div className="space-y-3">
                   {groupedSkills.updateAvailable.map(renderSkillCard)}
@@ -401,10 +447,23 @@ export default function CreateSkillPage() {
               <div>
                 <h2 className="text-lg font-medium mb-3 flex items-center gap-2">
                   <Download className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
-                  {t('skillhub.install.notInstalledCount', { count: groupedSkills.notInstalled.length })}
+                  未安装 ({groupedSkills.notInstalled.length})
                 </h2>
                 <div className="space-y-3">
                   {groupedSkills.notInstalled.map(renderSkillCard)}
+                </div>
+              </div>
+            )}
+            
+            {/* 处理中（草稿/审批中） */}
+            {groupedSkills.pending.length > 0 && (
+              <div>
+                <h2 className="text-lg font-medium mb-3 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                  处理中 ({groupedSkills.pending.length})
+                </h2>
+                <div className="space-y-3">
+                  {groupedSkills.pending.map(renderSkillCard)}
                 </div>
               </div>
             )}
@@ -414,7 +473,7 @@ export default function CreateSkillPage() {
               <div>
                 <h2 className="text-lg font-medium mb-3 flex items-center gap-2">
                   <Check className="w-4 h-4 text-green-500" />
-                  {t('skillhub.install.installedCount', { count: groupedSkills.installed.length })}
+                  已激活 ({groupedSkills.installed.length})
                 </h2>
                 <div className="space-y-3">
                   {groupedSkills.installed.map(renderSkillCard)}

@@ -292,6 +292,7 @@ export default function SkillDetailPage() {
               
               {/* 操作按钮 */}
               <div className="flex items-center gap-2 flex-wrap">
+                {/* 草稿状态：提交审批 */}
                 {skill.status === 'draft' && permissions.canEdit && (
                   <Button
                     size="sm"
@@ -304,10 +305,11 @@ export default function SkillDetailPage() {
                     ) : (
                       <Send className="w-4 h-4" />
                     )}
-                    {t('skillhub.detail.submitApproval')}
+                    提交审批
                   </Button>
                 )}
                 
+                {/* 审批中状态：通过/拒绝 */}
                 {skill.status === 'pending_approval' && permissions.canApprove && (
                   <>
                     <Button
@@ -317,7 +319,7 @@ export default function SkillDetailPage() {
                       className="flex items-center gap-1.5"
                     >
                       <Check className="w-4 h-4" />
-                      {t('skillhub.detail.approve')}
+                      通过
                     </Button>
                     <Button
                       size="sm"
@@ -327,12 +329,13 @@ export default function SkillDetailPage() {
                       className="flex items-center gap-1.5"
                     >
                       <X className="w-4 h-4" />
-                      {t('skillhub.detail.reject')}
+                      拒绝
                     </Button>
                   </>
                 )}
                 
-                {skill.trustStatus !== 'trusted' && isAdmin && (
+                {/* 未信任状态：信任按钮（与审批流程独立） */}
+                {skill.status === 'active' && skill.trustStatus !== 'trusted' && isAdmin && (
                   <Button
                     size="sm"
                     variant="secondary"
@@ -341,11 +344,12 @@ export default function SkillDetailPage() {
                     className="flex items-center gap-1.5"
                   >
                     <Shield className="w-4 h-4" />
-                    {t('skillhub.detail.trust')}
+                    信任此技能
                   </Button>
                 )}
                 
-                {permissions.canEdit && (
+                {/* 编辑按钮 */}
+                {permissions.canEdit && skill.status !== 'pending_approval' && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -357,6 +361,7 @@ export default function SkillDetailPage() {
                   </Button>
                 )}
                 
+                {/* 删除按钮 */}
                 {permissions.canDelete && (
                   <Button
                     size="sm"

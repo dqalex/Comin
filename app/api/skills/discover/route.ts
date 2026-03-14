@@ -51,13 +51,15 @@ export const GET = withAuth(async (request: NextRequest, auth: AuthResult) => {
       installedSkills
     );
     
-    // 4. 分类统计
+    // 4. 分类统计（按本地状态）
     const stats = {
       total: skillsWithStatus.length,
       valid: skillsWithStatus.filter(s => s.valid).length,
-      notInstalled: skillsWithStatus.filter(s => s.installStatus === 'not_installed').length,
-      installed: skillsWithStatus.filter(s => s.installStatus === 'installed').length,
-      updateAvailable: skillsWithStatus.filter(s => s.installStatus === 'update_available').length,
+      notRecorded: skillsWithStatus.filter(s => s.localStatus === 'not_recorded').length,
+      draft: skillsWithStatus.filter(s => s.localStatus === 'draft').length,
+      pendingApproval: skillsWithStatus.filter(s => s.localStatus === 'pending_approval').length,
+      active: skillsWithStatus.filter(s => s.localStatus === 'active').length,
+      updateAvailable: skillsWithStatus.filter(s => s.localStatus === 'active' && s.installStatus === 'update_available').length,
     };
     
     return NextResponse.json({

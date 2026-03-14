@@ -244,14 +244,14 @@ export default function SkillHubPage() {
               // 已信任
               <Badge className="text-[10px] bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400 flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" />
-                {t('skillhub.trust.trusted')}
+                已信任
               </Badge>
             ) : (
-              // 待审核 + 审核按钮
+              // 待信任 + 信任按钮
               <div className="flex items-center gap-1">
                 <Badge className="text-[10px] bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  {t('skillhub.trust.pending')}
+                  待信任
                 </Badge>
                 {isAdmin && (
                   <Button
@@ -260,14 +260,14 @@ export default function SkillHubPage() {
                     onClick={() => handleTrust(skill)}
                     disabled={isTrusting}
                     className="h-5 px-1.5 text-[10px]"
-                    title={t('skillhub.trust.review')}
+                    title="信任此技能"
                   >
                     {isTrusting ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
                     ) : (
                       <Shield className="w-3 h-3" />
                     )}
-                    {t('skillhub.trust.review')}
+                    信任
                   </Button>
                 )}
               </div>
@@ -382,7 +382,7 @@ export default function SkillHubPage() {
             <div className="p-4 rounded-lg border text-center" style={{ borderColor: 'var(--border)' }}>
               <div className="text-2xl font-bold text-amber-600">{stats.pending}</div>
               <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {t('skillhub.stats.pending')}
+                待信任
               </div>
             </div>
           </div>

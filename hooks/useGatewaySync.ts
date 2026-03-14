@@ -131,7 +131,7 @@ export function useGatewaySync() {
         }
         
         // 配置错误（token 错误或连接失败），停止轮询并显示错误
-        if (mode === 'server_proxy' && isFatalError(status)) {
+        if (mode === 'server_proxy' && status && isFatalError(status)) {
           logger.error(`[GatewaySync] Fatal error detected: ${status}, stopping poll`);
           stopPolling();
           return;
