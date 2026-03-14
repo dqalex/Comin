@@ -89,6 +89,10 @@ echo "✓ 同步完成"
 
 # 3. 服务器端构建
 echo "[3/6] 服务器端构建..."
+
+# 注意：数据库现在固定存储在项目根目录的 data/ 下，不会被构建覆盖
+# 构建过程中 standalone/data/ 的临时数据库不影响生产数据
+
 ssh $SERVER "$NVM_INIT cd $REMOTE_PATH && npm install --production=false && npm run build"
 
 if [ $? -ne 0 ]; then

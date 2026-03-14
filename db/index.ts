@@ -32,31 +32,33 @@ import { logger } from '@/lib/logger';
  * 3. 向上查找 data 目录（standalone 模式）
  */
 function getDatabasePath(): string {
-  // 1. 环境变量优先
+  // 1. 环境变量优先（生产环境推荐显式配置）
   if (process.env.TEAMCLAW_DB_PATH) {
     return process.env.TEAMCLAW_DB_PATH;
   }
   
-  // 2. 检查 process.cwd()/data 是否存在（开发模式或正确配置的 standalone）
-  const cwdDataPath = join(process.cwd(), 'data', 'teamclaw.db');
-  if (existsSync(dirname(cwdDataPath))) {
-    return cwdDataPath;
-  }
-  
-  // 3. standalone 模式：从 __dirname 向上查找项目根目录
-  // __dirname 可能是 .next/standalone/.next/server/chunks/ 或类似路径
+  // 2. standalone 模式：优先使用项目根目录的 data，而非 standalone/data
+  // 从 __dirname 向上查找，直到找到真正的项目根目录
+  // 真正的项目根目录包含 package.json 且不是 standalone 子目录
   let currentDir = __dirname;
   for (let i = 0; i < 10; i++) {
-    const dataPath = join(currentDir, 'data', 'teamclaw.db');
-    if (existsSync(dirname(dataPath))) {
-      return dataPath;
+    // 检查是否是项目根目录：包含 package.json 且包含 data 目录
+    // 排除 standalone/.next 等子目录中的 package.json
+    const hasPackageJson = existsSync(join(currentDir, 'package.json'));
+    const hasDataDir = existsSync(join(currentDir, 'data'));
+    const isStandaloneSubdir = currentDir.includes('.next/standalone') || currentDir.includes('.next\\standalone');
+    
+    if (hasPackageJson && hasDataDir && !isStandaloneSubdir) {
+      return join(currentDir, 'data', 'teamclaw.db');
     }
+    
+    // 继续向上查找
     const parentDir = dirname(currentDir);
-    if (parentDir === currentDir) break; // 已到达根目录
+    if (parentDir === currentDir) break;
     currentDir = parentDir;
   }
   
-  // 4. 最后回退：尝试创建 data 目录
+  // 3. 回退：使用 process.cwd()/data（保持向后兼容）
   return join(process.cwd(), 'data', 'teamclaw.db');
 }
 
