@@ -8,7 +8,7 @@
 
 import Database from 'better-sqlite3';
 import path from 'path';
-import { BUILTIN_SOP_TEMPLATES, BUILTIN_RENDER_TEMPLATES } from '../db/templates';
+import { BUILTIN_SOP_TEMPLATES, BUILTIN_RENDER_TEMPLATES } from '../../db/templates';
 
 const DB_PATH = path.join(process.cwd(), 'data/teamclaw.db');
 

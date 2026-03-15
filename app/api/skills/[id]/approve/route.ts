@@ -78,11 +78,12 @@ export const POST = withAuth(async (
       ))
       .limit(1);
     
-    // 更新 Skill 状态
+    // 更新 Skill 状态（审批通过 = 自动信任）
     await db
       .update(skills)
       .set({
         status: 'active',
+        trustStatus: 'trusted', // 审批通过时自动信任
         updatedAt: now,
       })
       .where(eq(skills.id, id));

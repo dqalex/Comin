@@ -99,7 +99,8 @@ export const POST = withAuth(async (
             note: note || 'Uninstalled by admin',
             operatedBy: auth.userId!,
             operatedAt: now,
-          });
+            createdAt: now,
+          } as typeof skillTrustRecords.$inferInsert);
           
           uninstalledAgents.push(targetAgentId);
         }
@@ -124,7 +125,8 @@ export const POST = withAuth(async (
           note: note || 'Uninstalled by admin (offline)',
           operatedBy: auth.userId!,
           operatedAt: now,
-        });
+          createdAt: now,
+        } as typeof skillTrustRecords.$inferInsert);
         
         uninstalledAgents.push(targetAgentId);
       }

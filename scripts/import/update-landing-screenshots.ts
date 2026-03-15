@@ -1,4 +1,4 @@
-import { db, landingPages } from '../db';
+import { db, landingPages } from '../../db';
 import { eq } from 'drizzle-orm';
 
 const landingEnContent = `<!-- @slot:heroBadge -->

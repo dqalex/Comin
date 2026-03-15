@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SSE Test</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; }
+    .message { background: #f0f0f0; padding: 10px; margin: 5px 0; border-radius: 4px; }
+    .connected { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h2>SSE 测试</h2>
+  <div id="status">Connecting...</div>
+  <div id="messages"></div>
+
+  <script>
+    const status = document.getElementById('status');
+    const messages = document.getElementById('messages');
+    
+    // 注意：需要登录才能连接 SSE
+    const evtSource = new EventSource('/api/sse');
+    
+    evtSource.onopen = () => {
+      status.innerHTML = '<span class="connected">Connected</span>';
+    };
+    
+    evtSource.onmessage = (e) => {
+      const div = document.createElement('div');
+      div.className = 'message';
+      try {
+        const data = JSON.parse(e.data);
+        div.textContent = JSON.stringify(data, null, 2);
+        if (data.type === 'gateway_chat_event') {
+          div.style.background = '#d4edda';
+        }
+      } catch {
+        div.textContent = e.data;
+      }
+      messages.prepend(div);
+    };
+    
+    evtSource.onerror = (e) => {
+      status.innerHTML = '<span class="error">Error - check login status</span>';
+      console.error('SSE Error:', e);
+    };
+  </script>
+</body>
+</html>

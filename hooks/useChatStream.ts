@@ -59,7 +59,7 @@ function executeChatActions(content: string): string {
 /**
  * 订阅 ChatEvent 流并处理 delta/final/aborted/error
  * 
- * @param expectedKey 期望匹配的 sessionKey（宽松匹配：精确 or agent: 前缀）
+ * @param expectedKey 期望匹配的 sessionKey（精确匹配或严格前缀匹配）
  * @param callbacks 回调函数集
  * @param handlerActiveRef 可选的互斥标记（避免持久监听器与发送监听器竞争）
  * @returns StreamController 控制器
@@ -74,10 +74,26 @@ export function subscribeChatStream(
   let rafId: number | null = null;
 
   const unsub = useGatewayStore.getState().onChatEvent((payload: ChatEventPayload) => {
-    // 宽松匹配：精确匹配、已匹配的 key、或同一 agent 前缀
-    const isMatch = payload.sessionKey === expectedKey
-      || (matchedKey !== null && payload.sessionKey === matchedKey)
-      || (!matchedKey && payload.sessionKey?.startsWith('agent:'));
+    // 严格匹配：精确匹配 或 已确认的匹配 key
+    // 注意：不再使用宽松的 `startsWith('agent:')` 匹配，避免多个会话之间的干扰
+    // 使用大小写不敏感匹配，因为 Gateway 可能返回小写的 sessionKey
+    const normalizedExpected = expectedKey.toLowerCase();
+    const normalizedReceived = payload.sessionKey?.toLowerCase() || '';
+    const isMatch = normalizedReceived === normalizedExpected
+      || (matchedKey !== null && normalizedReceived === matchedKey.toLowerCase());
+    
+    // 调试日志（帮助排查匹配问题）
+    if (process.env.NODE_ENV === 'development' && !isMatch) {
+      // 只记录与预期 key 相似但不匹配的事件
+      if (normalizedReceived.includes(expectedKey.split(':')[1] || '')) {
+        console.log('[useChatStream] SessionKey mismatch:', {
+          expected: expectedKey,
+          received: payload.sessionKey,
+          state: payload.state,
+        });
+      }
+    }
+    
     if (!isMatch) return;
 
     // 首次匹配时通知调用方
@@ -129,11 +145,16 @@ export function subscribeChatStream(
 
       callbacks.onComplete(resultContent, payload.state as 'final' | 'aborted' | 'error', payload.errorMessage);
       unsub();
-      if (handlerActiveRef) handlerActiveRef.current = false;
+      if (handlerActiveRef) {
+        handlerActiveRef.current = false;
+      }
     }
   });
 
-  if (handlerActiveRef) handlerActiveRef.current = true;
+  // 设置 handlerActiveRef 标记，同时保存清理函数以便在组件卸载时重置
+  if (handlerActiveRef) {
+    handlerActiveRef.current = true;
+  }
 
   return {
     cleanup: () => {

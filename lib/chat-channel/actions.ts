@@ -22,11 +22,11 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
   get_task: {
     type: 'get_task',
     name: '获取任务',
-    description: '获取任务详情，包括标题、描述、状态、负责人等信息',
+    description: '获取任务详情，包括标题、描述、状态、负责人等信息。任务推送场景下必须通过对话通道 Actions 调用此操作获取完整上下文',
     category: 'query',
     requiredParams: ['task_id'],
-    optionalParams: [],
-    supportedInChat: false,
+    optionalParams: ['detail'],
+    supportedInChat: true,
     requiresAuth: true,
   },
   
@@ -36,19 +36,19 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     description: '获取分配给当前 AI 成员的任务列表，支持按状态筛选',
     category: 'query',
     requiredParams: [],
-    optionalParams: ['status', 'project_id', 'limit'],
-    supportedInChat: false,
+    optionalParams: ['status', 'project_id', 'limit', 'detail'],
+    supportedInChat: true,
     requiresAuth: true,
   },
   
   get_project: {
     type: 'get_project',
     name: '获取项目',
-    description: '获取项目详情，包括名称、描述、成员、任务列表等',
+    description: '获取项目详情，包括名称、描述、成员、任务列表等。任务推送场景下必须通过对话通道 Actions 调用此操作获取项目上下文',
     category: 'query',
     requiredParams: ['project_id'],
-    optionalParams: [],
-    supportedInChat: false,
+    optionalParams: ['detail'],
+    supportedInChat: true,
     requiresAuth: true,
   },
   
@@ -59,7 +59,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'query',
     requiredParams: ['project_id'],
     optionalParams: [],
-    supportedInChat: false,
+    supportedInChat: true,
     requiresAuth: true,
   },
   
@@ -70,7 +70,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'query',
     requiredParams: [],
     optionalParams: ['document_id', 'title'],
-    supportedInChat: false,
+    supportedInChat: true,
     requiresAuth: true,
   },
   
@@ -81,7 +81,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'query',
     requiredParams: ['query'],
     optionalParams: ['project_id'],
-    supportedInChat: false,
+    supportedInChat: true,
     requiresAuth: true,
   },
   
@@ -92,7 +92,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'query',
     requiredParams: ['template_name'],
     optionalParams: [],
-    supportedInChat: false,
+    supportedInChat: true,
     requiresAuth: true,
   },
   
@@ -103,7 +103,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'query',
     requiredParams: [],
     optionalParams: [],
-    supportedInChat: false,
+    supportedInChat: true,
     requiresAuth: true,
   },
   
@@ -114,7 +114,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'query',
     requiredParams: [],
     optionalParams: ['member_id', 'enabled_only'],
-    supportedInChat: false,
+    supportedInChat: true,
     requiresAuth: true,
   },
 

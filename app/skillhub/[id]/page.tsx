@@ -23,7 +23,7 @@ import { useSkillStore, useAuthStore, useSOPTemplateStore } from '@/store';
 import { skillsApi } from '@/lib/data-service';
 import type { Skill, SOPTemplate } from '@/db/schema';
 import {
-  ArrowLeft, Edit, Trash2, Send, Check, X, Shield, AlertTriangle,
+  ArrowLeft, Edit, Trash2, Send, Check, X, Shield, ShieldOff, AlertTriangle,
   Clock, CheckCircle2, XCircle, FileText, BarChart3, Code, Settings,
   Zap, Calendar, User, Tag, Info, ClipboardList, ExternalLink,
 } from 'lucide-react';
@@ -97,17 +97,26 @@ export default function SkillDetailPage() {
         setLoading(false);
       }
       
-      // 始终从 API 获取最新数据
+      // 从 API 获取最新数据（仅当本地有数据或首次加载时）
       try {
         const { data, error } = await skillsApi.getById(skillId);
         if (data) {
+          // API 返回成功，更新数据
           setSkill(data);
-        } else if (!localSkill) {
-          console.error('Failed to load skill:', error);
+        } else if (error) {
+          // API 返回错误，保留本地数据（如果有）
+          console.warn('Failed to load skill from API, using local data:', error);
+          if (!localSkill) {
+            // 本地也没有数据，显示错误
+            console.error('No local skill data available');
+          }
+          // 重要：如果有本地数据，保持不变
         }
       } catch (err) {
+        // 网络或其他错误，保留本地数据
+        console.warn('Error loading skill from API:', err);
         if (!localSkill) {
-          console.error('Error loading skill:', err);
+          console.error('No local skill data available');
         }
       } finally {
         setLoading(false);
@@ -220,7 +229,25 @@ export default function SkillDetailPage() {
       setActionLoading(null);
     }
   };
-  
+
+  // 操作处理：取消信任
+  const handleUntrust = async () => {
+    if (!skill) return;
+    setActionLoading('untrust');
+    try {
+      const { error } = await skillsApi.untrust(skill.id);
+      if (error) {
+        toast.error(error);
+      } else {
+        await fetchSkills();
+        setSkill({ ...skill, trustStatus: 'untrusted' });
+        toast.success(t('skillhub.detail.untrustSuccess', '已取消审核标记'));
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // 操作处理：删除
   const handleDelete = async () => {
     if (!skill) return;
@@ -369,8 +396,8 @@ export default function SkillDetailPage() {
                   </>
                 )}
                 
-                {/* 未信任状态：信任按钮（与审批流程独立） */}
-                {skill.status === 'active' && skill.trustStatus !== 'trusted' && isAdmin && (
+                {/* 待审核状态：标记为已审核按钮（来源不明需确认） */}
+                {skill.status === 'active' && skill.trustStatus === 'pending' && isAdmin && (
                   <Button
                     size="sm"
                     variant="secondary"
@@ -380,6 +407,20 @@ export default function SkillDetailPage() {
                   >
                     <Shield className="w-4 h-4" />
                     {t('skillhub.detail.trustSkill')}
+                  </Button>
+                )}
+                
+                {/* 已信任状态：取消审核标记按钮（管理员可操作） */}
+                {skill.status === 'active' && skill.trustStatus === 'trusted' && isAdmin && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleUntrust}
+                    disabled={actionLoading !== null}
+                    className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700"
+                  >
+                    <ShieldOff className="w-4 h-4" />
+                    {t('skillhub.detail.untrust')}
                   </Button>
                 )}
                 
@@ -414,8 +455,8 @@ export default function SkillDetailPage() {
           </CardContent>
         </Card>
 
-        {/* 状态引导提示 */}
-        {skill.status === 'active' && skill.trustStatus !== 'trusted' && isAdmin && (
+        {/* 状态引导提示：仅 pending 状态显示（来源不明需确认） */}
+        {skill.status === 'active' && skill.trustStatus === 'pending' && isAdmin && (
           <div className="mb-6 p-4 rounded-lg border-2 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/30">
             <div className="flex items-center gap-3">
               <Shield className="w-5 h-5 text-amber-600 flex-shrink-0" />

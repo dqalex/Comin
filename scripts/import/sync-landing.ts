@@ -3,7 +3,7 @@
  * 用法：npx tsx scripts/sync-landing.ts
  */
 
-import { db, landingPages } from '../db';
+import { db, landingPages } from '../../db';
 import { eq } from 'drizzle-orm';
 import { readFileSync } from 'fs';
 import { join } from 'path';

@@ -83,7 +83,8 @@ export const POST = withAuth(async (
       note: note || null,
       operatedBy: auth.userId!,
       operatedAt: now,
-    });
+      createdAt: now,
+    } as typeof skillTrustRecords.$inferInsert);
     
     let uninstalledFrom: string[] = [];
     
@@ -114,7 +115,8 @@ export const POST = withAuth(async (
               note: `Auto-uninstalled due to untrust: ${note || 'No reason provided'}`,
               operatedBy: auth.userId!,
               operatedAt: now,
-            });
+              createdAt: now,
+            } as typeof skillTrustRecords.$inferInsert);
             
             uninstalledFrom.push(targetAgentId);
           }

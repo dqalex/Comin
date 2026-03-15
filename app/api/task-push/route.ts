@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { tasks, members, projects, documents, openclawFiles, openclawWorkspaces, sopTemplates, renderTemplates } from '@/db/schema';
+import { tasks, members, projects, milestones, documents, openclawFiles, openclawWorkspaces, sopTemplates, renderTemplates } from '@/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { renderTemplateWithContext } from '@/lib/template-engine';
 import { parseKnowHow, extractLayers } from '@/lib/knowhow-parser';
@@ -134,10 +134,26 @@ async function handleNormalPush(task: typeof tasks.$inferSelect, sessionKey: str
     }
   }
 
+  // 获取里程碑信息
+  let milestoneInfo = {
+    milestone_id: null as string | null,
+    milestone_title: null as string | null,
+  };
+
+  if (task.milestoneId) {
+    const [milestone] = await db.select().from(milestones).where(eq(milestones.id, task.milestoneId));
+    if (milestone) {
+      milestoneInfo = {
+        milestone_id: milestone.id,
+        milestone_title: milestone.title,
+      };
+    }
+  }
+
   const allMembers = await getAllMembers();
   const assigneeNames = resolveAssigneeNames(task.assignees, allMembers);
   const { filesSection, mappedWorkspacesData, mappedFilesData } = await buildFilesSection(task.attachments || []);
-  
+
   // 检查 Workspace 是否激活（用于渐进式上下文提示）
   const workspaceActive = await checkWorkspaceActive(sessionKey);
 
@@ -154,6 +170,8 @@ async function handleNormalPush(task: typeof tasks.$inferSelect, sessionKey: str
     project_name: projectInfo.project_name,
     project_description: projectInfo.project_description,
     project_source: projectInfo.project_source,
+    milestone_id: milestoneInfo.milestone_id,
+    milestone_title: milestoneInfo.milestone_title,
     conversation_id: sessionKey,
     mapped_workspaces: mappedWorkspacesData,
     mapped_files: mappedFilesData,
@@ -349,14 +367,42 @@ async function handleBatchPush(taskIds: string[], sessionKey: string) {
     : [];
   const projectMap = new Map(projectList.map(p => [p.id, p]));
 
+  // 获取里程碑信息
+  const milestoneIds = [...new Set(taskList.map(t => t.milestoneId).filter(Boolean))] as string[];
+  const milestoneList = milestoneIds.length > 0
+    ? await db.select().from(milestones).where(inArray(milestones.id, milestoneIds))
+    : [];
+  const milestoneMap = new Map(milestoneList.map(m => [m.id, m]));
+
+  // 获取所有任务的附件文档
+  const allAttachmentIds = [...new Set(taskList.flatMap(t => t.attachments || []))] as string[];
+  const attachmentDocs = allAttachmentIds.length > 0
+    ? await db.select().from(documents).where(inArray(documents.id, allAttachmentIds))
+    : [];
+  const docMap = new Map(attachmentDocs.map(d => [d.id, d]));
+
+  // 获取 OpenClaw 映射文件信息
+  const mappedFiles = allAttachmentIds.length > 0
+    ? await db.select().from(openclawFiles).where(inArray(openclawFiles.documentId, allAttachmentIds))
+    : [];
+  const workspaceIds = [...new Set(mappedFiles.map(f => f.workspaceId).filter(Boolean))] as string[];
+  const workspaces = workspaceIds.length > 0
+    ? await db.select().from(openclawWorkspaces).where(inArray(openclawWorkspaces.id, workspaceIds))
+    : [];
+  const workspaceMap = new Map(workspaces.map(w => [w.id, w]));
+  const mappedFileMap = new Map(mappedFiles.map(f => [f.documentId, f]));
+
   const allMembers = await getAllMembers();
 
+  // 构建任务数据
   const orderedTasks = taskIds
     .map((id, idx) => {
       const task = taskList.find(t => t.id === id);
       if (!task) return null;
       const project = task.projectId ? projectMap.get(task.projectId) : null;
+      const milestone = task.milestoneId ? milestoneMap.get(task.milestoneId) : null;
       const assigneeNames = resolveAssigneeNames(task.assignees, allMembers);
+      const taskAttachments = (task.attachments || []) as string[];
 
       return {
         index: idx + 1,
@@ -369,15 +415,42 @@ async function handleBatchPush(taskIds: string[], sessionKey: string) {
         assignees: assigneeNames || null,
         project_name: project?.name || null,
         project_id: project?.id || null,
+        milestone_title: milestone?.title || null,
+        milestone_id: milestone?.id || null,
+        has_attachments: taskAttachments.length > 0,
+        attachment_count: taskAttachments.length,
         last: idx === taskIds.length - 1,
       };
     })
     .filter(Boolean);
 
+  // 构建附件列表（用于模板展示）
+  const attachmentsList = [];
+  for (const task of taskList) {
+    const taskAttachments = (task.attachments || []) as string[];
+    for (const docId of taskAttachments) {
+      const doc = docMap.get(docId);
+      if (doc) {
+        const mappedFile = mappedFileMap.get(docId);
+        const workspace = mappedFile ? workspaceMap.get(mappedFile.workspaceId) : null;
+        attachmentsList.push({
+          doc_id: doc.id,
+          doc_title: doc.title,
+          task_id: task.id,
+          task_title: task.title,
+          workspace_path: workspace?.path || null,
+          relative_path: mappedFile?.relativePath || null,
+        });
+      }
+    }
+  }
+
   const message = await renderTemplateWithContext('batch-task-push', {
     timestamp: new Date().toLocaleString('zh-CN'),
     task_count: orderedTasks.length,
     tasks: orderedTasks,
+    has_attachments: attachmentsList.length > 0,
+    attachments: attachmentsList.length > 0 ? attachmentsList : null,
     conversation_id: sessionKey,
   });
 

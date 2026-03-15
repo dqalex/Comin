@@ -1102,9 +1102,10 @@ export default {
       rejectPlaceholder: '请输入拒绝原因...',
       confirmReject: '确认拒绝',
       deleteConfirmDesc: '删除后将无法恢复，确定要删除此技能吗？',
-      trustSkill: '信任此技能',
-      trustNow: '立即信任',
-      trustHint: '此技能已通过审批，但尚未信任。信任后 Agent 才能使用该技能。',
+      trustSkill: '标记为已审核',
+      trustNow: '标记已审核',
+      untrustSkill: '取消审核标记',
+      trustHint: '此技能来源需要确认。标记为已审核后将不再显示风险提醒。',
       pendingHint: '此技能正在等待管理员审批。',
     },
     
@@ -1171,15 +1172,19 @@ export default {
       groupNotInstalled: '未安装',
       groupPending: '处理中',
       groupInstalled: '已激活',
+      groupGatewayMismatch: '状态异常',
+      gatewayMismatchHint: '这些 Skill 在数据库中标记为"已激活"，但实际上没有安装到 OpenClaw Gateway。请重新安装以修复状态。',
       // 状态标签
       statusActive: '已激活',
       statusDraft: '本地草稿',
       statusPendingApproval: '审批中',
       statusRejected: '已拒绝',
       statusNotInstalled: '未安装',
+      statusMismatch: '状态异常',
       // 按钮
       viewDetail: '查看详情',
       updateButton: '更新',
+      reinstallButton: '重新安装',
       statusPendingBtn: '审批中',
     },
     

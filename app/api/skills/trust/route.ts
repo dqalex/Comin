@@ -102,7 +102,8 @@ export const POST = withAuth(async (
       note: note || null,
       operatedBy: auth.userId!,
       operatedAt: now,
-    });
+      createdAt: now,
+    } as typeof skillTrustRecords.$inferInsert);
     
     // 发送 SSE 事件
     eventBus.emit({

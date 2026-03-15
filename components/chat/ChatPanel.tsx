@@ -149,16 +149,30 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
 
   // 处理 pending 消息（从外部触发的聊天）
   useEffect(() => {
+    console.log('[ChatPanel] Pending message effect triggered:', {
+      hasMessage: !!pendingChatMessage,
+      initialized,
+      gwConnected,
+      agentsMainKey,
+      pendingGatewaySessionKey,
+      handlerActive: handlerActiveRef.current,
+    });
+    
     if (!pendingChatMessage || !initialized) return;
-    if (gwConnected && !agentsMainKey && !pendingGatewaySessionKey) return; // 等待 agentsMainKey 或 sessionKey
+    if (gwConnected && !agentsMainKey && !pendingGatewaySessionKey) {
+      console.log('[ChatPanel] Waiting for agentsMainKey or pendingGatewaySessionKey');
+      return;
+    }
 
     const msg = pendingChatMessage;
     // v3.0 多用户：优先使用 pendingGatewaySessionKey（用户专用会话），否则使用 agentsMainKey
     const targetSessionKey = pendingGatewaySessionKey || agentsMainKey;
+    console.log('[ChatPanel] Processing pending message with session:', targetSessionKey);
     clearPendingChat();
 
     // Gateway 模式
     if (gwConnected && targetSessionKey) {
+      console.log('[ChatPanel] Using Gateway mode, setting up session');
       setGwSessionKey(targetSessionKey);
       setActiveGwSessionKey(targetSessionKey);
       setActiveSession(null);
@@ -167,48 +181,72 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
       setGwSessionMessages([]);
 
       const gwClient = getActiveGwClient();
-      if (!gwClient) { setLoadingHistory(false); return; }
+      if (!gwClient) { 
+        console.error('[ChatPanel] No Gateway client available');
+        setLoadingHistory(false); 
+        return; 
+      }
 
       // 加载历史 → 发送消息 → 订阅流式回复
       gwClient.getChatHistory(targetSessionKey, 200)
         .then((result) => {
+          console.log('[ChatPanel] Chat history loaded, messages count:', result.messages?.length || 0);
           const historyMsgs = normalizeHistoryMessages(result.messages || []);
           setGwSessionMessages([...historyMsgs, { role: 'user', content: msg }]);
           setHistoryLoaded(true);
           setLoadingHistory(false);
 
           // 订阅 AI 响应
+          console.log('[ChatPanel] Subscribing to chat stream for:', targetSessionKey);
           setSending(true);
           setGwSessionMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
           const stream = subscribeChatStream(targetSessionKey, {
-            onDelta: updateGwAssistant,
-            onComplete: completeGwStream,
+            onDelta: (content) => {
+              console.log('[ChatPanel] Send listener received delta, length:', content.length);
+              updateGwAssistant(content);
+            },
+            onComplete: (content, state, error) => {
+              console.log('[ChatPanel] Send listener completed:', state, 'handlerActive will be reset');
+              completeGwStream(content);
+              // 确保 handlerActiveRef 被重置
+              handlerActiveRef.current = false;
+            },
           }, handlerActiveRef);
 
           setTimeout(() => {
+            console.log('[ChatPanel] Sending chat message to Gateway');
             gwClient.sendChatMessage({
               sessionKey: targetSessionKey,
               message: msg,
             }).catch((e) => {
-              console.error('Failed to send message:', e);
+              console.error('[ChatPanel] Failed to send message:', e);
               stream.cleanup();
+              handlerActiveRef.current = false;
               setSending(false);
             });
           }, 100);
         })
         .catch((e) => {
-          console.error('Failed to load chat history:', e);
+          console.error('[ChatPanel] Failed to load chat history:', e);
           setLoadingHistory(false);
           setGwSessionMessages([{ role: 'user', content: msg }]);
           setHistoryLoaded(true);
 
           // 即使加载历史失败也发送消息
+          console.log('[ChatPanel] Sending message without history');
           setSending(true);
           setGwSessionMessages(prev => [...prev, { role: 'assistant', content: '' }]);
           const stream = subscribeChatStream(targetSessionKey, {
-            onDelta: updateGwAssistant,
-            onComplete: completeGwStream,
+            onDelta: (content) => {
+              console.log('[ChatPanel] Send listener (no history) received delta, length:', content.length);
+              updateGwAssistant(content);
+            },
+            onComplete: (content, state, error) => {
+              console.log('[ChatPanel] Send listener (no history) completed:', state);
+              completeGwStream(content);
+              handlerActiveRef.current = false;
+            },
           }, handlerActiveRef);
 
           setTimeout(() => {
@@ -216,8 +254,9 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
               sessionKey: targetSessionKey,
               message: msg,
             }).catch((err) => {
-              console.error('Failed to send message:', err);
+              console.error('[ChatPanel] Failed to send message:', err);
               stream.cleanup();
+              handlerActiveRef.current = false;
               setSending(false);
             });
           }, 100);
@@ -239,9 +278,27 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
 
   // 处理 Gateway session 跳转
   useEffect(() => {
-    if (!pendingGatewaySessionKey || !gwConnected) return;
+    console.log('[ChatPanel] Session jump effect triggered:', { 
+      pendingGatewaySessionKey, 
+      gwConnected,
+      pendingChatMessage: !!pendingChatMessage 
+    });
+    
+    if (!pendingGatewaySessionKey || !gwConnected) {
+      console.log('[ChatPanel] Skipping session jump - missing key or not connected');
+      return;
+    }
     const key = pendingGatewaySessionKey;
-    clearPendingChat();
+    console.log('[ChatPanel] Setting up Gateway session:', key);
+    
+    // 关键修复：只有当没有 pendingChatMessage 时才清理
+    // 如果有 pendingChatMessage，让 Pending message effect 来处理清理和发送
+    if (!pendingChatMessage) {
+      console.log('[ChatPanel] No pending message, clearing pending chat');
+      clearPendingChat();
+    } else {
+      console.log('[ChatPanel] Has pending message, skipping clearPendingChat (will be handled by pending message effect)');
+    }
 
     setGwSessionKey(key);
     setGwSessionMessages([]);
@@ -263,25 +320,60 @@ export default function ChatPanel({ onClose }: ChatPanelProps) {
         console.error('Failed to load chat history:', e);
       })
       .finally(() => setLoadingHistory(false));
-  }, [pendingGatewaySessionKey, gwConnected, clearPendingChat, setActiveSession]);
+  }, [pendingGatewaySessionKey, gwConnected, pendingChatMessage, clearPendingChat, setActiveSession]);
 
   // 持续监听 Gateway session 的 chat 事件（接收 AI 主动推送）
+  // 关键修复：只要有 gwSessionKey 就注册监听器，不依赖 gwConnected
+  // 因为 gwConnected 可能在消息发送后才变为 true，导致错过响应
   useEffect(() => {
-    if (!gwSessionKey || !gwConnected) return;
+    console.log('[ChatPanel] Persistent listener effect triggered:', { 
+      gwSessionKey, 
+      gwConnected, 
+      hasHandlerActiveRef: !!handlerActiveRef 
+    });
+    
+    // 关键修复：只检查 gwSessionKey，不检查 gwConnected
+    // gwConnected 可能在消息发送后才变为 true，如果等待它，会错过 AI 响应
+    if (!gwSessionKey) {
+      console.log('[ChatPanel] Skipping persistent listener - no session key');
+      return;
+    }
+
+    console.log('[ChatPanel] Registering persistent listener for:', gwSessionKey, '(connected:', gwConnected, ')');
 
     const stream = subscribeChatStream(gwSessionKey, {
       onDelta: (accumulated) => {
-        if (handlerActiveRef.current) return; // 发送中的 handler 优先
+        // 当发送中的 handler 活跃时，跳过持久监听器的处理
+        if (handlerActiveRef.current) {
+          console.log('[ChatPanel] Skipping delta (handler active)');
+          return;
+        }
+        console.log('[ChatPanel] Persistent listener received delta, length:', accumulated.length);
         updateGwAssistant(accumulated);
       },
-      onComplete: (content) => {
-        if (handlerActiveRef.current) return;
+      onComplete: (content, state, errorMessage) => {
+        if (handlerActiveRef.current) {
+          console.log('[ChatPanel] Skipping complete (handler active)');
+          return;
+        }
+        console.log('[ChatPanel] Persistent listener completed:', state);
         updateGwAssistant(content);
+        setSending(false);
+        
+        if (state === 'error' && errorMessage) {
+          setErrorMessage(errorMessage);
+        }
+      },
+      onKeyMatched: (matchedKey) => {
+        console.log('[ChatPanel] Persistent listener matched key:', matchedKey);
       },
     });
 
-    return () => stream.cleanup();
-  }, [gwSessionKey, gwConnected, updateGwAssistant]);
+    return () => {
+      console.log('[ChatPanel] Cleaning up persistent listener for:', gwSessionKey);
+      stream.cleanup();
+    };
+  }, [gwSessionKey, updateGwAssistant, setSending]); // 移除 gwConnected 依赖
 
   // 刷新恢复
   useEffect(() => {

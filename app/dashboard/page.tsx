@@ -342,7 +342,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* 频道状态 */}
-                {health && Object.keys(health.channels).length > 0 && (
+                {health && health.channels && Object.keys(health.channels).length > 0 && (
                   <div className="mt-4">
                     <button
                       onClick={() => setShowChannels(!showChannels)}

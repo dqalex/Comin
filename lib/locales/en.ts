@@ -1101,9 +1101,10 @@ export default {
       rejectPlaceholder: 'Enter rejection reason...',
       confirmReject: 'Confirm Reject',
       deleteConfirmDesc: 'This action cannot be undone. Are you sure you want to delete this skill?',
-      trustSkill: 'Trust Skill',
-      trustNow: 'Trust Now',
-      trustHint: 'This skill has been approved but not yet trusted. Trust it to enable Agent usage.',
+      trustSkill: 'Mark as Reviewed',
+      trustNow: 'Mark Reviewed',
+      untrustSkill: 'Remove Review Mark',
+      trustHint: 'This skill source needs confirmation. Mark as reviewed to stop showing risk alerts.',
       pendingHint: 'This skill is waiting for admin approval.',
     },
     
@@ -1170,15 +1171,19 @@ export default {
       groupNotInstalled: 'Not Installed',
       groupPending: 'Processing',
       groupInstalled: 'Active',
+      groupGatewayMismatch: 'Status Mismatch',
+      gatewayMismatchHint: 'These Skills are marked as "Active" in database but not actually installed in OpenClaw Gateway. Please reinstall to fix.',
       // 状态标签
       statusActive: 'Active',
       statusDraft: 'Local Draft',
       statusPendingApproval: 'Pending Approval',
       statusRejected: 'Rejected',
       statusNotInstalled: 'Not Installed',
+      statusMismatch: 'Status Mismatch',
       // 按钮
       viewDetail: 'View Details',
       updateButton: 'Update',
+      reinstallButton: 'Reinstall',
       statusPendingBtn: 'Pending Approval',
     },
     

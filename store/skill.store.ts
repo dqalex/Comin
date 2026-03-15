@@ -74,10 +74,13 @@ export const useSkillStore = create<SkillState>()((set, get) => ({
   
   // 异步方法
   fetchSkills: async (filters) => {
+    const currentSkills = get().skills;
     set({ loading: true, error: null });
     const { data, error } = await skillsApi.getAll(filters);
     if (error) {
+      // 错误时不清空已有数据，只设置 error 状态
       set({ loading: false, error });
+      console.warn('[SkillStore] fetchSkills failed, keeping existing data:', error);
     } else {
       // API 返回 { data: Skill[], total, limit, offset }，需要提取 data 数组
       const response = data as { data?: Skill[]; total?: number } | Skill[];

@@ -41,6 +41,9 @@ export interface DiscoveredSkill {
   installStatus?: 'not_installed' | 'installed' | 'update_available';
   installedVersion?: string;
   installedId?: string;
+  
+  // Gateway 实际状态（与 Gateway skills.status 对比后填充）
+  gatewayStatus?: 'installed' | 'not_installed' | 'unknown' | 'not_applicable' | 'error';
 }
 
 /**

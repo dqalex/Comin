@@ -87,13 +87,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       gateway_agent_update: () => refreshAgents(),
       gateway_session_update: () => refreshSessions(),
       gateway_chat_event: (data?: unknown) => {
+        console.log('[DataProvider] gateway_chat_event received:', data);
         if (data) {
           const eventData = data as { gatewayEvent?: string; payload?: ChatEventPayload };
           if (eventData.payload) {
+            console.log('[DataProvider] Dispatching chat event:', eventData.payload.state, eventData.payload.sessionKey);
             dispatchChatEvent(eventData.payload);
             if (eventData.payload.state === 'final') {
               refreshSessions();
             }
+          } else {
+            console.log('[DataProvider] No payload in chat event');
           }
         }
       },

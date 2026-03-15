@@ -54,20 +54,23 @@ export const POST = withAuth(async (
     const skillData = skill[0];
     const now = new Date();
     
-    // 创建信任记录
-    const recordId = generateId();
+    // 全局信任时不创建记录（agent_id 有外键约束，不能使用 'global'）
+    // 仅针对特定 Agent 创建信任记录
+    if (agentId) {
+      const recordId = generateId();
+      await db.insert(skillTrustRecords).values({
+        id: recordId,
+        skillId: id,
+        agentId,
+        action: 'trust',
+        note: note || null,
+        operatedBy: auth.userId!,
+        operatedAt: now,
+        createdAt: now,
+      } as typeof skillTrustRecords.$inferInsert);
+    }
     
-    await db.insert(skillTrustRecords).values({
-      id: recordId,
-      skillId: id,
-      agentId: agentId || 'global',
-      action: 'trust',
-      note: note || null,
-      operatedBy: auth.userId!,
-      operatedAt: now,
-    });
-    
-    // 更新 Skill 的信任状态（仅全局信任）
+    // 更新 Skill 的信任状态（全局信任或特定 Agent 信任）
     if (!agentId) {
       await db
         .update(skills)

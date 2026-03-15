@@ -24,7 +24,13 @@
     "test:report": "bash tests/scripts/run-all-tests.sh",
     "arch:check": "npm run arch:knip && npm run arch:cruise",
     "arch:knip": "knip --no-progress",
-    "arch:cruise": "depcruise --validate .dependency-cruiser.cjs app lib store db components"
+    "arch:cruise": "depcruise --validate .dependency-cruiser.cjs app lib store db components",
+    "mock:gateway": "npx tsx scripts/mock-gateway/mock-gateway.ts",
+    "test:task-push": "npx tsx scripts/testing/test-task-push.ts",
+    "test:chat": "npx vitest run tests/integration/chat-stream.test.ts",
+    "test:chat:integration": "npx tsx scripts/testing/test-chat-integration.ts",
+    "test:chat:auto": "npx tsx scripts/testing/test-full-automation.ts",
+    "test:chat:e2e": "npx playwright test tests/e2e/chat-stream.spec.ts --headed"
   },
   "dependencies": {
     "argon2": "^0.44.0",

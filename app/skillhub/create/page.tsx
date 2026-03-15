@@ -45,6 +45,8 @@ interface DiscoveredSkill {
   installStatus?: 'not_installed' | 'installed' | 'update_available';
   installedVersion?: string;
   installedId?: string;
+  // Gateway 实际状态
+  gatewayStatus?: 'installed' | 'not_installed' | 'unknown' | 'not_applicable' | 'error';
 }
 
 // 分类颜色映射
@@ -223,7 +225,13 @@ export default function CreateSkillPage() {
                 
                 {/* 显示本地记录状态和 Gateway 激活状态 */}
                 {skill.localStatus === 'active' ? (
-                  skill.installStatus === 'update_available' ? (
+                  skill.gatewayStatus === 'not_installed' ? (
+                    // 状态不一致：数据库标记为 active，但 Gateway 中未安装
+                    <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                      <AlertCircle className="w-3 h-3" />
+                      {t('skillhub.install.statusMismatch')} v{skill.localVersion}
+                    </span>
+                  ) : skill.installStatus === 'update_available' ? (
                     <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                       <Upload className="w-3 h-3" />
                       {t('skillhub.install.updateAvailable')} v{skill.localVersion} → v{skill.version}
@@ -317,7 +325,7 @@ export default function CreateSkillPage() {
               )}
               
               {/* 已激活且有更新 */}
-              {skill.localStatus === 'active' && skill.installStatus === 'update_available' && (
+              {skill.localStatus === 'active' && skill.installStatus === 'update_available' && skill.gatewayStatus !== 'not_installed' && (
                 <Button
                   size="sm"
                   onClick={() => handleInstall(skill)}
@@ -333,8 +341,26 @@ export default function CreateSkillPage() {
                 </Button>
               )}
               
+              {/* 状态不一致：数据库 active 但 Gateway 未安装 - 重新安装 */}
+              {skill.localStatus === 'active' && skill.gatewayStatus === 'not_installed' && (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => handleInstall(skill, true)}
+                  disabled={isInstalling}
+                  className="flex items-center gap-1"
+                >
+                  {isInstalling ? (
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Download className="w-3 h-3" />
+                  )}
+                  {t('skillhub.install.reinstallButton')}
+                </Button>
+              )}
+              
               {/* 已激活无更新：查看详情 */}
-              {skill.localStatus === 'active' && skill.installStatus === 'installed' && skill.localId && (
+              {skill.localStatus === 'active' && skill.installStatus === 'installed' && skill.gatewayStatus !== 'not_installed' && skill.localId && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -354,14 +380,16 @@ export default function CreateSkillPage() {
   
   // 按状态分组
   const groupedSkills = {
+    // 状态不一致（数据库 active 但 Gateway 未安装）
+    gatewayMismatch: (discovered || []).filter(s => s.localStatus === 'active' && s.gatewayStatus === 'not_installed'),
     // 可更新（已激活但版本更高）
-    updateAvailable: (discovered || []).filter(s => s.localStatus === 'active' && s.installStatus === 'update_available'),
+    updateAvailable: (discovered || []).filter(s => s.localStatus === 'active' && s.installStatus === 'update_available' && s.gatewayStatus !== 'not_installed'),
     // 未记录或已拒绝（需要安装）
     notInstalled: (discovered || []).filter(s => s.localStatus === 'not_recorded' || s.localStatus === 'rejected'),
     // 草稿和审批中（已记录但未激活）
     pending: (discovered || []).filter(s => s.localStatus === 'draft' || s.localStatus === 'pending_approval'),
     // 已激活且最新
-    installed: (discovered || []).filter(s => s.localStatus === 'active' && s.installStatus === 'installed'),
+    installed: (discovered || []).filter(s => s.localStatus === 'active' && s.installStatus === 'installed' && s.gatewayStatus !== 'not_installed'),
   };
   
   return (
@@ -440,6 +468,24 @@ export default function CreateSkillPage() {
         {/* Skill 列表 */}
         {!discovering && discovered.length > 0 && (
           <div className="space-y-6">
+            {/* 状态不一致：需要重新安装 */}
+            {groupedSkills.gatewayMismatch.length > 0 && (
+              <div>
+                <h2 className="text-lg font-medium mb-3 flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <AlertCircle className="w-4 h-4" />
+                  {t('skillhub.install.groupGatewayMismatch')} ({groupedSkills.gatewayMismatch.length})
+                </h2>
+                <div className="p-3 mb-3 rounded-lg bg-red-50 dark:bg-red-950 text-sm">
+                  <p className="text-red-600 dark:text-red-400">
+                    {t('skillhub.install.gatewayMismatchHint')}
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {groupedSkills.gatewayMismatch.map(renderSkillCard)}
+                </div>
+              </div>
+            )}
+            
             {/* 可更新 */}
             {groupedSkills.updateAvailable.length > 0 && (
               <div>

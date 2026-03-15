@@ -42,19 +42,19 @@ metadata: { "openclaw": { "always": true, "emoji": "🧠", "homepage": "https://
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│   对话信道 Actions  │   MCP API (核心)  │   文档同步         │
-│   (高效但有边界)    │   (可靠兜底)      │   (便捷需验证)     │
+│   对话信道 Actions (主要)  │   MCP API (独立 HTTP)  │   文档同步         │
+│   (任务推送场景唯一通道)   │   (可选备用通道)       │   (批量写入)       │
 ├─────────────────────────────────────────────────────────────────┤
-│   ❌ 依赖 WebSocket  │   ✅ 独立 HTTP     │   ❌ 格式要求严格  │
-│   ❌ 静默失败        │   ✅ 显式错误返回  │   ❌ 失败仅日志    │
-│   ❌ 仅写入操作      │   ✅ 查询+写入     │   ❌ 无即时验证    │
+│   ✅ 查询 + 写入          │   ✅ HTTP POST         │   ❌ 格式要求严格  │
+│   ✅ 实时响应             │   ✅ 显式错误返回       │   ❌ 失败仅日志    │
+│   ✅ 自动身份注入         │   ✅ 需 Bearer Token    │   ❌ 无即时验证    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **决策树**：
-- 需要 100% 确认结果 → 使用 **MCP API**（唯一可靠通道）
-- 在对话中回复用户 → 操作支持 Actions？ → Actions + MCP 验证
-- 批量写入 ≥2 条 → Markdown 同步 + MCP 验证
+- **任务推送场景** → **必须使用对话通道 Actions**（查询 + 写入）
+- 需要独立 HTTP API 调用（如外部脚本）→ 使用 **MCP API**（需配置 executionMode）
+- 批量写入 ≥2 条 → Markdown 同步 + Actions 验证
 
 ### 3. 验证机制
 
@@ -77,18 +77,18 @@ metadata: { "openclaw": { "always": true, "emoji": "🧠", "homepage": "https://
 ### 流程
 
 1. **确认收到** → 在对话中说明执行计划
-2. **更新状态** → `update_task_status(in_progress)` + MCP 验证
-3. **获取上下文** → MCP API `get_task_detail()` / `get_project()`
+2. **获取上下文** → **对话通道 Actions** `get_task` + `get_project`
+3. **更新状态** → **对话通道 Actions** `update_task_status(in_progress)`
 4. **执行** → 遇到关键节点主动汇报
-5. **产出交付** → 如需要，提交到交付中心
-6. **完成任务** → `update_task_status(completed/reviewing)` + MCP 验证
+5. **产出交付** → 如需要，**对话通道 Actions** `deliver_document`
+6. **完成任务** → **对话通道 Actions** `update_task_status(completed/reviewing)`
 
 ### ⚠️ 必须遵守
 
 - 开始前**必须**更新状态为 `in_progress`
 - 完成后**必须**更新状态为 `completed` 或 `reviewing`
 - **必须**在对话中主动汇报工作进展
-- 关键操作后**必须**用 MCP 验证结果
+- **任务推送场景必须使用对话通道 Actions** - 没有独立的 MCP 工具可用
 
 ---
 
@@ -120,12 +120,21 @@ metadata: { "openclaw": { "always": true, "emoji": "🧠", "homepage": "https://
 
 **触发**：自主检查待处理任务
 
-**必须使用 MCP API**（查询操作不支持 Actions）：
+**使用对话通道 Actions**：
+
+```json
+{"actions": [{"type": "list_my_tasks", "status": "todo"}]}
+{"actions": [{"type": "list_my_tasks", "status": "all"}]}
+```
+
+**如需独立 HTTP API 调用**：
 
 ```json
 {"tool": "list_my_tasks", "parameters": {"status": "todo"}}
-{"tool": "list_my_tasks", "parameters": {"status": "all"}}
 ```
+
+端点：`POST ${TEAMCLAW_BASE_URL}/api/mcp/external`
+鉴权：`Authorization: Bearer ${TEAMCLAW_API_TOKEN}`
 
 ---
 
@@ -135,26 +144,48 @@ metadata: { "openclaw": { "always": true, "emoji": "🧠", "homepage": "https://
 
 ### 对话信道 Actions 格式
 
+**任务推送场景下获取上下文的唯一方式！**
+
 在消息**末尾**嵌入 JSON 块：
 
 ```json
 {"actions": [
+  {"type": "get_task", "task_id": "xxx"},
+  {"type": "get_project", "project_id": "xxx"},
   {"type": "update_task_status", "task_id": "xxx", "status": "in_progress"},
-  {"type": "add_comment", "task_id": "xxx", "content": "开始执行"},
-  {"type": "update_status", "status": "working", "task_id": "xxx"}
+  {"type": "add_comment", "task_id": "xxx", "content": "开始执行"}
 ]}
 ```
 
+**执行流程**：
+1. Agent 在回复中嵌入 Actions JSON
+2. TeamClaw 接收消息并解析 Actions
+3. 执行 Actions 并将结果返回给 Agent
+4. Agent 基于返回的上下文继续执行
+
 ### 支持的 Actions 类型
 
-| 类型 | 必填字段 |
-|------|---------|
-| `update_task_status` | task_id, status |
-| `add_comment` | task_id, content |
-| `create_check_item` | task_id, text |
-| `create_document` | title, content |
-| `deliver_document` | title, platform |
-| `update_status` | status |
+**查询类（任务推送场景必须使用）：**
+
+| 类型 | 必填字段 | 说明 |
+|------|---------|------|
+| `get_task` | task_id | 获取任务详情（包含附件、评论）|
+| `get_project` | project_id | 获取项目详情（成员、任务列表）|
+| `list_my_tasks` | - | 获取我的任务列表 |
+| `get_document` | document_id 或 title | 获取 Wiki 文档内容 |
+
+**写入类：**
+
+| 类型 | 必填字段 | 说明 |
+|------|---------|------|
+| `update_task_status` | task_id, status | 更新任务状态（in_progress/completed/reviewing）|
+| `add_comment` | task_id, content | 添加评论 |
+| `create_check_item` | task_id, text | 创建检查项 |
+| `create_document` | title, content | 创建 Wiki 文档 |
+| `deliver_document` | title, platform | 提交交付 |
+| `update_status` | status | 更新 AI 实时状态面板 |
+
+**重要**：任务推送场景没有独立的 `get_task`、`update_task_status` 等工具可用，**必须通过对话通道 Actions 调用**！
 
 完整列表见 `references/tools.md`。
 

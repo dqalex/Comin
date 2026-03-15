@@ -270,8 +270,13 @@ export const skillsApi = {
   ...createCrudApiClient<Skill, NewSkill>('/api/skills', ['status', 'category', 'source']),
   
   // 获取单个 Skill
+  // API 返回 { data: { ...skill, trustRecords, _access } }，需要解包
   async getById(id: string): Promise<ApiResponse<Skill>> {
-    return apiRequest<Skill>(`/api/skills/${id}`);
+    const result = await apiRequest<{ data: Skill & { trustRecords?: unknown[]; _access?: unknown } }>(`/api/skills/${id}`);
+    if (result.data?.data) {
+      return { data: result.data.data };
+    }
+    return { error: result.error || 'Invalid response format' };
   },
   
   // 提交审批

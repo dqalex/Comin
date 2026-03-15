@@ -1,35 +1,12 @@
 ---
 title: 批量任务推送模板
-description: 批量推送多个任务给 AI 时使用的精简系统提示模板
+description: 批量推送多个任务给 AI 时使用的精简系统提示模板（假设已安装 teamclaw skill）
 teamclaw_version: "{{teamclaw_version}}"
 ---
 
 **这是一条批量任务推送消息，包含 {{task_count}} 个任务，请按顺序执行！**
 
-## 汇报规范（必须遵循）
-
-> ⚠️ **你必须在当前对话中主动汇报工作进展，而不是默默执行！**
-
-1. **收到任务时**：确认收到，列出任务清单和执行计划
-2. **每个任务开始时**：简短说明"开始处理第 N 个任务：XXX"
-3. **每个任务完成时**：汇报完成情况和产出
-4. **全部完成时**：发送总结，说明各任务处理结果
-5. **遇到问题时**：立即在对话中说明问题和处理方案
-
-**回复风格要求**：
-- 简洁明了，不要冗长废话
-- 用自然语言汇报，像同事之间沟通一样
-- 重要信息加粗标注
-
-## 来源信息
-- **数据来源**: TeamClaw 协作平台
-- **服务类型**: 本地 SQLite 数据库（通过 TeamClaw MCP 工具访问）
-- **推送时间**: {{timestamp}}
-
-## 系统信息
-
-**团队成员**：{{human_member_names}}（人类）、{{ai_member_names}}（AI）
-**可用项目**：{{project_names}}
+> 你已获得 TeamClaw 协作平台的任务。作为 AI 成员，请遵循 @teamclaw skill 执行标准化操作。
 
 ---
 
@@ -40,6 +17,9 @@ teamclaw_version: "{{teamclaw_version}}"
 - **任务 ID**: {{id}}
 - **优先级**: {{priority}}
 - **当前状态**: {{status}}
+{{#milestone_title}}
+- **所属里程碑**: {{milestone_title}}
+{{/milestone_title}}
 {{#deadline}}
 - **截止时间**: {{deadline}}
 {{/deadline}}
@@ -49,6 +29,9 @@ teamclaw_version: "{{teamclaw_version}}"
 {{#project_name}}
 - **所属项目**: {{project_name}}
 {{/project_name}}
+{{#has_attachments}}
+- **关联文档**: 有 {{attachment_count}} 个附件（见下方「关联文档」部分）
+{{/has_attachments}}
 {{#description}}
 
 **描述**:
@@ -59,60 +42,58 @@ teamclaw_version: "{{teamclaw_version}}"
 
 ---
 
-## 执行流程（必须遵循）
+## ⚠️ 关键：获取上下文的方式
 
-> ⚠️ **关键：请按顺序逐个处理每个任务，并在对话中汇报进展！**
-> - 每个任务开始执行 → 在对话中说明 + 调用 `update_task_status("in_progress")`
-> - 每个任务完成 → 在对话中汇报 + 调用 `update_task_status("completed")`
-> - 创建笔记/文档 ≠ 完成任务，必须更新状态！
+**批量任务推送场景下，必须使用对话通道 Actions 获取完整上下文！**
 
-### 第一步：确认收到 + 设置任务队列
-1. **在对话中回复**：确认收到 {{task_count}} 个任务，列出执行计划
-2. 使用 set_queue 工具设置待处理的任务队列：
+在回复消息中嵌入以下 JSON 格式的 Actions：
+
 ```json
-{"actions": [{"type": "set_queue", "queued_tasks": [{{#tasks}}{"id": "{{id}}", "title": "{{title}}"}{{^last}}, {{/last}}{{/tasks}}]}]}
+{"actions": [
+  {"type": "get_task", "task_id": "任务ID"},
+  {"type": "get_project", "project_id": "项目ID"},
+  {"type": "list_my_tasks", "status": "todo"}
+]}
 ```
 
-### 第二步：按顺序处理每个任务
+**Action 说明：**
+- `get_task` - 获取单个任务详情（包含附件、评论等）
+- `get_project` - 获取项目信息（了解项目目标、成员、其他任务）
+- `list_my_tasks` - 获取待办任务列表
 
-对于每个任务：
-1. **在对话中说明**："开始处理第 N 个任务：XXX"
-2. **更新状态为 `in_progress`**
-3. **获取上下文**（通过 `get_task`、`get_project`、`list_documents`）
-4. **执行任务**（用 `add_task_comment` 记录进度）
-5. **完成后在对话中汇报**结果，并根据产出类型选择：
-   - **需要用户决策的文档** → `deliver_document` + 状态设为 `reviewing`
-   - **无需用户决策** → 状态设为 `completed` + 添加完成总结
-
-### 第三步：发送总结
-所有任务处理完毕后，**在对话中发送总结消息**，说明各任务的处理结果。
-
-## 可用工具
-
-### 本地文件操作（优先）
-- `read`: 读取本地映射目录中的文件
-- `write`: 创建或覆写文件
-- `edit`: 精确编辑文件
-
-### TeamClaw MCP 工具
-- 任务: `get_task`, `update_task_status`, `add_task_comment`, `create_task`
-- 项目: `get_project`, `list_projects`, `update_project`
-- 文档: `get_document`, `list_documents`, `create_document`
-- 交付物: `deliver_document`, `list_deliveries`
+**调用方式：**
+1. 在对话回复中嵌入上述 JSON Actions
+2. TeamClaw 会自动执行这些 Actions 并将结果返回给你
+3. 基于返回的上下文执行任务
 
 ---
 
-## ⚠️ 完成检查清单
+## 执行流程
 
-{{#tasks}}
-### 任务 {{index}}: {{title}} ({{id}})
-- [ ] 已在对话中说明开始处理
-- [ ] 已更新状态为 `in_progress`
-- [ ] 已执行任务
-- [ ] 已更新最终状态（`completed` 或 `reviewing`）
-- [ ] 已在对话中汇报完成情况
-{{/tasks}}
+1. **确认收到**：在对话中说明收到 {{task_count}} 个任务，列出执行计划
+2. **逐个处理每个任务**：
+   - 在对话中说明"开始处理第 N 个任务：XXX"
+   - **在回复中嵌入 Actions JSON 调用 `get_task` 和 `get_project`** 获取完整上下文
+   - 在回复中嵌入 Action 更新状态为 `in_progress`：
+     ```json
+     {"actions": [{"type": "update_task_status", "task_id": "任务ID", "status": "in_progress"}]}
+     ```
+   - 执行任务
+   - 在回复中嵌入 Action 更新状态为 `completed` 或 `reviewing`：
+     ```json
+     {"actions": [{"type": "update_task_status", "task_id": "任务ID", "status": "completed"}]}
+     ```
+3. **发送总结**：所有任务完成后，在对话中发送总结
 
-- [ ] 已在对话中发送全部任务的总结
+---
 
-**请立即开始，先在对话中确认收到并说明执行计划！**
+## 关键提醒
+
+- ⚠️ **不要只看任务描述** - 必须通过对话通道 Actions 获取项目和任务上下文
+- ⚠️ **主动在对话中汇报** - 关键进展、问题、完成时都要在对话中说明
+- ⚠️ **关联文档必读** - 任务中关联的文档通常包含执行所需的背景信息
+- ⚠️ **对话通道 Actions 是唯一获取上下文的方式** - 没有独立的 MCP 工具可用
+
+---
+
+**请立即开始，先在对话中确认收到并使用 Actions 获取上下文！**

@@ -1235,7 +1235,10 @@ export const skillTrustRecords = sqliteTable('skill_trust_records', {
   // 操作者
   operatedBy: text('operated_by').notNull(),  // userId
   
-  operatedAt: integer('operated_at', { mode: 'timestamp' }),  // 可空，兼容旧数据
+  operatedAt: integer('operated_at', { mode: 'timestamp' }),
+  
+  // 兼容旧表结构
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 }, (table) => ({
   skillIdx: index('idx_skill_trust_skill').on(table.skillId),
   agentIdx: index('idx_skill_trust_agent').on(table.agentId),

@@ -30,9 +30,92 @@ import { isVersionHigher, normalizeVersion } from '@/lib/version-utils';
 import { eventBus } from '@/lib/event-bus';
 import { withAuth, type AuthResult } from '@/lib/with-auth';
 import { nanoid } from 'nanoid';
-import { readFile } from 'fs/promises';
-import path, { basename } from 'path';
+import { readFile, access, rm, cp } from 'fs/promises';
+import { constants } from 'fs';
+import path from 'path';
 import { getServerGatewayClient } from '@/lib/server-gateway-client';
+
+// Gateway 的 workspace skills 目录（OpenClaw 会扫描此目录）
+const GATEWAY_WORKSPACE_SKILLS_DIR = process.env.GATEWAY_WORKSPACE_SKILLS_DIR || '/root/.openclaw/workspace/skills';
+
+/**
+ * 复制 Skill 到 Gateway workspace/skills 目录
+ * 让 Gateway 能够扫描到 TeamClaw 安装的 skill
+ * 
+ * 注意：使用复制而非软链接，因为：
+ * 1. 软链接在 Windows 上需要管理员权限
+ * 2. 复制是跨平台兼容的方案
+ * 
+ * 冲突处理：
+ * - 如果目标目录已存在同名 skill，检查是否是同一个 skill
+ * - 同一个 skill（name 匹配）：允许覆盖（版本更新）
+ * - 不同 skill：自动添加 `teamclaw-` 前缀避免冲突
+ */
+async function copySkillToGateway(
+  skillPath: string, 
+  skillKey: string,
+  skillName: string
+): Promise<{ success: boolean; error?: string; actualSkillKey?: string }> {
+  try {
+    let targetDir = path.join(GATEWAY_WORKSPACE_SKILLS_DIR, skillKey);
+    let actualSkillKey = skillKey;
+    
+    // 确保 Gateway workspace skills 目录存在
+    const { mkdir } = await import('fs/promises');
+    await mkdir(GATEWAY_WORKSPACE_SKILLS_DIR, { recursive: true });
+    
+    // 检查目标目录是否已存在
+    try {
+      await access(targetDir, constants.F_OK);
+      
+      // 目标已存在，检查是否是同一个 skill
+      const targetSkillMdPath = path.join(targetDir, 'SKILL.md');
+      try {
+        const targetContent = await readFile(targetSkillMdPath, 'utf-8');
+        // 提取目标 skill 的 name
+        const nameMatch = targetContent.match(/^name:\s*(.+)$/m);
+        const targetName = nameMatch ? nameMatch[1].trim() : null;
+        
+        if (targetName && targetName !== skillName) {
+          // 名称不同，说明是不同的 skill，使用 teamclaw- 前缀
+          actualSkillKey = `teamclaw-${skillKey}`;
+          targetDir = path.join(GATEWAY_WORKSPACE_SKILLS_DIR, actualSkillKey);
+          console.log(`[Skill Install] Conflict detected: "${skillKey}" contains different skill "${targetName}". Using "${actualSkillKey}" instead.`);
+          
+          // 检查新目录是否也存在
+          try {
+            await access(targetDir, constants.F_OK);
+            // 新目录也存在，先删除
+            await rm(targetDir, { recursive: true, force: true });
+            console.log(`[Skill Install] Removed existing directory: ${targetDir}`);
+          } catch {
+            // 新目录不存在，直接使用
+          }
+        } else {
+          // 名称相同，是同一个 skill 的更新版本，允许覆盖
+          console.log(`[Skill Install] Updating existing skill: ${skillName}`);
+          await rm(targetDir, { recursive: true, force: true });
+          console.log(`[Skill Install] Removed existing skill directory: ${targetDir}`);
+        }
+      } catch {
+        // 目标目录没有 SKILL.md，可能是损坏的目录，允许覆盖
+        console.log(`[Skill Install] Target directory has no SKILL.md, will overwrite`);
+        await rm(targetDir, { recursive: true, force: true });
+      }
+    } catch {
+      // 目标不存在，直接复制
+    }
+    
+    // 复制整个 skill 目录到 Gateway 扫描目录
+    await cp(skillPath, targetDir, { recursive: true });
+    console.log(`[Skill Install] Copied skill to Gateway: ${skillPath} -> ${targetDir}`);
+    return { success: true, actualSkillKey };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Skill Install] Failed to copy skill to Gateway:`, errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
 
 /**
  * POST /api/skills/install - 安装或更新 Skill
@@ -125,7 +208,8 @@ export const POST = withAuth(async (request: NextRequest, auth: AuthResult) => {
         source: 'teamclaw',
         sopTemplateId: null,
         createdBy: auth.userId!,
-        trustStatus: 'pending',
+        // TeamClaw 安装的技能默认信任（但仍需审批才能激活）
+        trustStatus: 'trusted',
         isSensitive: sensitiveDetection.isSensitive,
         sensitivityNote: sensitiveDetection.isSensitive 
           ? sensitiveDetection.reasons.join('; ')
@@ -174,11 +258,19 @@ export const POST = withAuth(async (request: NextRequest, auth: AuthResult) => {
       try {
         const gatewayClient = getServerGatewayClient();
         if (gatewayClient?.isConnected) {
-          const skillDirName = basename(skillPath);
+          // 1. 先复制 skill 到 Gateway workspace/skills 目录
+          const copyResult = await copySkillToGateway(skillPath, skillKey, skillData.name);
+          if (!copyResult.success) {
+            console.warn('[Skill Install] Failed to copy skill to Gateway:', copyResult.error);
+          }
+          
+          // 2. 再调用 Gateway skills.install API（使用实际的 skillKey）
+          const installSkillKey = copyResult.actualSkillKey || skillKey;
           await gatewayClient.request('skills.install', { 
-            name: skillDirName, 
+            name: installSkillKey, 
             installId: `install-${skillId}` 
           });
+          console.log(`[Skill Install] Successfully installed to Gateway: ${installSkillKey}`);
         }
       } catch (gatewayError) {
         console.warn('[Skill Install] Gateway install failed:', gatewayError);
@@ -258,11 +350,19 @@ export const POST = withAuth(async (request: NextRequest, auth: AuthResult) => {
     try {
       const gatewayClient = getServerGatewayClient();
       if (gatewayClient?.isConnected) {
-        const skillDirName = basename(skillPath);
+        // 1. 先复制到 Gateway workspace/skills 目录
+        const copyResult = await copySkillToGateway(skillPath, skillKey, skillData.name);
+        if (!copyResult.success) {
+          console.warn('[Skill Install] Failed to copy skill to Gateway:', copyResult.error);
+        }
+        
+        // 2. 调用 Gateway skills.install API（使用实际的 skillKey）
+        const installSkillKey = copyResult.actualSkillKey || skillKey;
         await gatewayClient.request('skills.install', { 
-          name: skillDirName, 
+          name: installSkillKey, 
           installId: `install-${existingSkill.id}` 
         });
+        console.log(`[Skill Install] Successfully updated in Gateway: ${installSkillKey}`);
       }
     } catch (gatewayError) {
       console.warn('[Skill Install] Gateway install failed:', gatewayError);
